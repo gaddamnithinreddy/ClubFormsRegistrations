@@ -11,24 +11,36 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true
+    detectSessionInUrl: true,
+    flowType: 'pkce'
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10
+    }
+  },
+  global: {
+    headers: {
+      'x-application-name': 'club-forms-registrations'
+    }
   }
 });
 
+// Initialize error recovery
 let refreshRetryCount = 0;
 const maxRefreshRetries = 3;
 const refreshRetryDelay = 1000;
 
-// Add error handling for refresh token failures
+// Handle auth state changes
 supabase.auth.onAuthStateChange((event, session) => {
   if (event === 'SIGNED_IN') {
     console.log('User signed in');
     refreshRetryCount = 0;
-  } else if (event === 'USER_UPDATED') {
-    console.log('User session updated');
+  } else if (event === 'TOKEN_REFRESHED') {
+    console.log('Token refreshed');
     refreshRetryCount = 0;
   } else if (event === 'SIGNED_OUT') {
-    // Clear any stored tokens and reset retry count
+    console.log('User signed out');
     localStorage.removeItem('supabase.auth.token');
     refreshRetryCount = 0;
   }
@@ -36,7 +48,7 @@ supabase.auth.onAuthStateChange((event, session) => {
 
 // Handle token refresh errors
 supabase.auth.onAuthStateChange((event, session) => {
-  if (!session) {
+  if (event === 'TOKEN_REFRESHED' && !session) {
     if (refreshRetryCount < maxRefreshRetries) {
       setTimeout(() => {
         refreshRetryCount++;
