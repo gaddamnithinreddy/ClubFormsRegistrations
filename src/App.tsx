@@ -33,102 +33,119 @@ export default function App() {
 
   // Initialize auth state
   useEffect(() => {
-    console.log('App: Starting initialization...');
     let isMounted = true;
     let initTimeout: NodeJS.Timeout;
 
+    console.log('App Mount - Starting initialization');
+
     const initAuth = async () => {
       try {
-        console.log('App: Checking session...');
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          console.error('App: Session error:', sessionError);
-          throw sessionError;
+        // Check if we have a session
+        const { data: { session } } = await supabase.auth.getSession();
+        console.log('Session Check Result:', {
+          hasSession: !!session,
+          userId: session?.user?.id
+        });
+
+        if (!session) {
+          console.log('No session found - completing initialization');
+          if (isMounted) setIsInitializing(false);
+          return;
         }
 
-        console.log('App: Session status:', session ? 'Exists' : 'None');
-
-        if (session?.user && isMounted) {
-          console.log('App: Fetching user role...');
-          const { data, error: roleError } = await supabase
+        // If we have a session, fetch the role
+        if (session.user && isMounted) {
+          console.log('Fetching role for user:', session.user.id);
+          const { data: roleData, error: roleError } = await supabase
             .from('user_roles')
             .select('role')
             .eq('user_id', session.user.id)
             .single();
-          
+
+          console.log('Role fetch result:', {
+            success: !roleError,
+            role: roleData?.role,
+            error: roleError?.message
+          });
+
           if (roleError && roleError.code !== 'PGRST116') {
-            console.error('App: Role error:', roleError);
             throw roleError;
           }
-          
-          if (data?.role && isMounted) {
-            console.log('App: Setting role:', data.role);
-            setRole(data.role);
+
+          if (roleData?.role && isMounted) {
+            setRole(roleData.role);
           }
         }
-      } catch (error) {
-        console.error('App: Initialization error:', error);
+      } catch (err) {
+        console.error('Initialization error:', err);
         if (isMounted) {
-          setError(error instanceof Error ? error.message : 'Failed to initialize application');
+          setError(err instanceof Error ? err.message : 'Failed to initialize application');
         }
       } finally {
-        if (isMounted) {
-          console.log('App: Completing initialization...');
-          setIsInitializing(false);
-        }
+        console.log('Completing initialization');
+        if (isMounted) setIsInitializing(false);
       }
     };
 
-    // Set a timeout to force completion of initialization
+    // Set a shorter timeout for initialization
     initTimeout = setTimeout(() => {
       if (isMounted && isInitializing) {
-        console.log('App: Forcing initialization completion...');
+        console.log('Forcing initialization completion after timeout');
         setIsInitializing(false);
       }
-    }, 5000); // Force completion after 5 seconds
+    }, 3000); // Reduced to 3 seconds
 
+    // Start initialization
     initAuth();
 
-    // Listen for auth changes
+    // Auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('App: Auth state changed:', event);
-      if (!isMounted) return;
+      console.log('Auth state change:', { event, hasSession: !!session });
+      
+      if (!isMounted) {
+        console.log('Ignoring auth change - component unmounted');
+        return;
+      }
 
       if (!session) {
-        console.log('App: Clearing role...');
+        console.log('No session - clearing role');
         setRole(null);
-      } else {
-        try {
-          console.log('App: Fetching updated role...');
-          const { data, error } = await supabase
-            .from('user_roles')
-            .select('role')
-            .eq('user_id', session.user.id)
-            .single();
-          
-          if (error && error.code !== 'PGRST116') {
-            console.error('App: Role fetch error:', error);
-            throw error;
-          }
-          
-          if (data?.role && isMounted) {
-            console.log('App: Updating role:', data.role);
-            setRole(data.role);
-          }
-        } catch (error) {
-          console.error('App: Role update error:', error);
+        return;
+      }
+
+      // Update role on auth change
+      try {
+        const { data: roleData, error: roleError } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', session.user.id)
+          .single();
+
+        console.log('Role update result:', {
+          success: !roleError,
+          role: roleData?.role,
+          error: roleError?.message
+        });
+
+        if (roleError && roleError.code !== 'PGRST116') {
+          throw roleError;
         }
+
+        if (roleData?.role && isMounted) {
+          setRole(roleData.role);
+        }
+      } catch (err) {
+        console.error('Role update error:', err);
       }
     });
 
     return () => {
-      console.log('App: Cleaning up...');
+      console.log('App cleanup');
       isMounted = false;
       clearTimeout(initTimeout);
       subscription.unsubscribe();
     };
-  }, [setRole, isInitializing]);
+  }, [setRole]);
 
   // Theme effect with performance optimization
   useEffect(() => {

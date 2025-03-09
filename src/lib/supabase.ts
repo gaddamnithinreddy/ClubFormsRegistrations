@@ -7,28 +7,37 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-console.log('Initializing Supabase client...');
+console.log('Supabase Config:', {
+  url: supabaseUrl,
+  hasAnonKey: !!supabaseAnonKey
+});
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
+    storage: localStorage,
     storageKey: 'club-forms-auth',
-    storage: window.localStorage
+    flowType: 'implicit'
   }
 });
 
 // Debug auth state
 supabase.auth.onAuthStateChange((event, session) => {
-  console.log('Auth state changed:', event, session ? 'Session exists' : 'No session');
-  
-  if (event === 'SIGNED_IN') {
-    console.log('User signed in');
-  } else if (event === 'SIGNED_OUT') {
-    console.log('User signed out');
-    localStorage.removeItem('club-forms-auth');
-  } else if (event === 'TOKEN_REFRESHED') {
-    console.log('Token refreshed');
-  }
+  console.log('Auth Event:', event);
+  console.log('Session:', {
+    exists: !!session,
+    user: session?.user?.email,
+    expires: session?.expires_at
+  });
+});
+
+// Initial session check
+supabase.auth.getSession().then(({ data: { session } }) => {
+  console.log('Initial Session Check:', {
+    exists: !!session,
+    user: session?.user?.email,
+    expires: session?.expires_at
+  });
 });
