@@ -7,6 +7,9 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.7",
+    "@tiptap/extension-placeholder": "^2.11.5",
+    "@tiptap/react": "^2.11.5",
+    "@tiptap/starter-kit": "^2.11.5",
     "@types/react-helmet-async": "^1.0.1",
     "dompurify": "^3.0.9",
     "framer-motion": "^11.0.8",
