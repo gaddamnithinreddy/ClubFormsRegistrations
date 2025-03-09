@@ -9,7 +9,8 @@ export default defineConfig({
     include: [
       '@tiptap/react',
       '@tiptap/starter-kit',
-      '@tiptap/extension-placeholder'
+      '@tiptap/extension-placeholder',
+      'qrcode.react'
     ]
   },
   build: {
@@ -36,7 +37,7 @@ export default defineConfig({
             if (id.includes('@tiptap')) {
               return 'tiptap-vendor';
             }
-            if (id.includes('dompurify') || id.includes('qrcode') || id.includes('date-fns')) {
+            if (id.includes('dompurify') || id.includes('qrcode.react') || id.includes('date-fns')) {
               return 'utils-vendor';
             }
             return 'vendor';
