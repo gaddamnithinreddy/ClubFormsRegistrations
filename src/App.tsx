@@ -33,14 +33,24 @@ export default function App() {
 
   // Initialize auth state
   useEffect(() => {
+    console.log('App: Starting initialization...');
     let isMounted = true;
+    let initTimeout: NodeJS.Timeout;
 
     const initAuth = async () => {
       try {
+        console.log('App: Checking session...');
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError) throw sessionError;
+        
+        if (sessionError) {
+          console.error('App: Session error:', sessionError);
+          throw sessionError;
+        }
+
+        console.log('App: Session status:', session ? 'Exists' : 'None');
 
         if (session?.user && isMounted) {
+          console.log('App: Fetching user role...');
           const { data, error: roleError } = await supabase
             .from('user_roles')
             .select('role')
@@ -48,33 +58,49 @@ export default function App() {
             .single();
           
           if (roleError && roleError.code !== 'PGRST116') {
+            console.error('App: Role error:', roleError);
             throw roleError;
           }
           
           if (data?.role && isMounted) {
+            console.log('App: Setting role:', data.role);
             setRole(data.role);
           }
         }
       } catch (error) {
-        console.error('Auth initialization error:', error);
-        setError(error instanceof Error ? error.message : 'Failed to initialize application');
+        console.error('App: Initialization error:', error);
+        if (isMounted) {
+          setError(error instanceof Error ? error.message : 'Failed to initialize application');
+        }
       } finally {
         if (isMounted) {
+          console.log('App: Completing initialization...');
           setIsInitializing(false);
         }
       }
     };
 
+    // Set a timeout to force completion of initialization
+    initTimeout = setTimeout(() => {
+      if (isMounted && isInitializing) {
+        console.log('App: Forcing initialization completion...');
+        setIsInitializing(false);
+      }
+    }, 5000); // Force completion after 5 seconds
+
     initAuth();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('App: Auth state changed:', event);
       if (!isMounted) return;
 
       if (!session) {
+        console.log('App: Clearing role...');
         setRole(null);
       } else {
         try {
+          console.log('App: Fetching updated role...');
           const { data, error } = await supabase
             .from('user_roles')
             .select('role')
@@ -82,23 +108,27 @@ export default function App() {
             .single();
           
           if (error && error.code !== 'PGRST116') {
+            console.error('App: Role fetch error:', error);
             throw error;
           }
           
           if (data?.role && isMounted) {
+            console.log('App: Updating role:', data.role);
             setRole(data.role);
           }
         } catch (error) {
-          console.error('Error fetching user role:', error);
+          console.error('App: Role update error:', error);
         }
       }
     });
 
     return () => {
+      console.log('App: Cleaning up...');
       isMounted = false;
+      clearTimeout(initTimeout);
       subscription.unsubscribe();
     };
-  }, [setRole]);
+  }, [setRole, isInitializing]);
 
   // Theme effect with performance optimization
   useEffect(() => {
@@ -111,6 +141,7 @@ export default function App() {
   }, [isDarkMode]);
 
   if (isInitializing) {
+    console.log('App: Rendering loading state...');
     return (
       <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 ${isDarkMode ? 'dark' : ''}`}>
         <LoadingFallback />
@@ -119,6 +150,7 @@ export default function App() {
   }
 
   if (error) {
+    console.log('App: Rendering error state:', error);
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center p-8">
@@ -139,6 +171,7 @@ export default function App() {
     );
   }
 
+  console.log('App: Rendering main application...');
   return (
     <HelmetProvider>
       <ErrorBoundary>
