@@ -17,7 +17,8 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
     chunkSizeWarningLimit: 600,
-    cssMinify: true,
+    cssMinify: 'lightningcss',
+    cssCodeSplit: true,
     rollupOptions: {
       output: {
         manualChunks: (id) => {
