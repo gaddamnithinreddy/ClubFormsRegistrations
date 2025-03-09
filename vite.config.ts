@@ -17,10 +17,19 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
     chunkSizeWarningLimit: 600,
-    cssMinify: 'lightningcss',
+    cssMinify: false,
     cssCodeSplit: true,
     rollupOptions: {
       output: {
+        assetFileNames: (info) => {
+          const name = info.name || '';
+          if (name.endsWith('.css')) {
+            return 'assets/css/[name]-[hash][extname]';
+          }
+          return 'assets/[name]-[hash][extname]';
+        },
+        chunkFileNames: 'assets/js/[name]-[hash].js',
+        entryFileNames: 'assets/js/[name]-[hash].js',
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
             if (id.includes('react/') || id.includes('react-dom/')) {
@@ -45,6 +54,17 @@ export default defineConfig({
           }
         }
       }
+    }
+  },
+  css: {
+    postcss: {
+      plugins: [
+        require('autoprefixer'),
+        require('tailwindcss'),
+      ]
+    },
+    modules: {
+      localsConvention: 'camelCase'
     }
   },
   server: {
