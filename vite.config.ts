@@ -16,6 +16,7 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
     chunkSizeWarningLimit: 600,
+    cssMinify: true,
     rollupOptions: {
       output: {
         manualChunks: (id) => {
@@ -42,8 +43,7 @@ export default defineConfig({
           }
         }
       }
-    },
-    cssMinify: 'lightningcss',
+    }
   },
   server: {
     port: 3000,
