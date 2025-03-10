@@ -15,7 +15,8 @@ export default defineConfig({
       '@tiptap/starter-kit',
       '@tiptap/extension-placeholder',
       'qrcode.react'
-    ]
+    ],
+    exclude: ['zustand']
   },
   build: {
     outDir: 'dist',
@@ -24,24 +25,26 @@ export default defineConfig({
     cssMinify: false,
     cssCodeSplit: true,
     rollupOptions: {
-      external: ['react', 'react-dom', 'react/jsx-runtime'],
+      input: {
+        main: './index.html'
+      },
       output: {
-        assetFileNames: (info) => {
-          const name = info.name || '';
-          if (name.endsWith('.css')) {
-            return 'assets/css/[name]-[hash][extname]';
-          }
-          return 'assets/[name]-[hash][extname]';
-        },
-        chunkFileNames: 'assets/js/[name]-[hash].js',
-        entryFileNames: 'assets/js/[name]-[hash].js',
         manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react/jsx-runtime'],
-          'router-vendor': ['react-router-dom'],
-          'ui-vendor': ['framer-motion'],
-          'icons-vendor': ['lucide-react'],
-          'tiptap-vendor': ['@tiptap/react', '@tiptap/starter-kit', '@tiptap/extension-placeholder'],
-          'utils-vendor': ['dompurify', 'qrcode.react', 'date-fns']
+          'vendor': [
+            'react',
+            'react-dom',
+            'react/jsx-runtime',
+            'react-router-dom',
+            'framer-motion',
+            'lucide-react',
+            '@tiptap/react',
+            '@tiptap/starter-kit',
+            '@tiptap/extension-placeholder',
+            'dompurify',
+            'qrcode.react',
+            'date-fns',
+            'zustand'
+          ]
         }
       }
     }

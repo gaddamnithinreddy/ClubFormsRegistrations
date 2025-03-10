@@ -13,9 +13,12 @@ interface ThemeState {
   toggleTheme: () => void;
 }
 
-// Initialize stores after React is loaded
-const initializeStores = () => {
-  const authStore = create<AuthState>()(
+// Ensure we're in a browser environment
+const isBrowser = typeof window !== 'undefined';
+
+// Create stores with safe initialization
+const createAuthStore = () => 
+  create<AuthState>()(
     persist(
       (set) => ({
         role: null,
@@ -24,31 +27,40 @@ const initializeStores = () => {
       }),
       {
         name: 'auth-storage',
-        storage: createJSONStorage(() => localStorage),
+        storage: isBrowser ? createJSONStorage(() => localStorage) : undefined,
         partialize: (state) => ({ role: state.role }),
       }
     )
   );
 
-  const themeStore = create<ThemeState>()(
+const createThemeStore = () =>
+  create<ThemeState>()(
     persist(
       (set) => ({
-        isDarkMode: typeof window !== 'undefined' 
-          ? window.matchMedia('(prefers-color-scheme: dark)').matches 
-          : false,
+        isDarkMode: isBrowser ? window.matchMedia('(prefers-color-scheme: dark)').matches : false,
         toggleTheme: () => set((state) => ({ isDarkMode: !state.isDarkMode })),
       }),
       {
         name: 'theme-storage',
-        storage: createJSONStorage(() => localStorage),
+        storage: isBrowser ? createJSONStorage(() => localStorage) : undefined,
       }
     )
   );
 
-  return { authStore, themeStore };
+// Initialize stores lazily
+let authStore: ReturnType<typeof createAuthStore>;
+let themeStore: ReturnType<typeof createThemeStore>;
+
+export const useAuthStore = (...args: Parameters<typeof createAuthStore>) => {
+  if (!authStore) {
+    authStore = createAuthStore();
+  }
+  return authStore(...args);
 };
 
-const stores = initializeStores();
-
-export const useAuthStore = stores.authStore;
-export const useThemeStore = stores.themeStore;
+export const useThemeStore = (...args: Parameters<typeof createThemeStore>) => {
+  if (!themeStore) {
+    themeStore = createThemeStore();
+  }
+  return themeStore(...args);
+};
