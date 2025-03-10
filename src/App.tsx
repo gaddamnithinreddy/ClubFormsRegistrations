@@ -215,7 +215,7 @@ export default function App() {
                 </li>
               </ul>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                These can be found in your Supabase project settings under Project Settings > API.
+                These can be found in your Supabase project settings under Project Settings &gt; API.
               </p>
               <button
                 onClick={() => window.location.reload()}
