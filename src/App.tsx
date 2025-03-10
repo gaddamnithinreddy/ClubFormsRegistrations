@@ -24,17 +24,25 @@ export default function App() {
 
   // Check Supabase configuration
   useEffect(() => {
+    const hasConfig = !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
+    if (!hasConfig) {
+      setIsSupabaseConfigured(false);
+      setError('Missing Supabase configuration. Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your environment variables.');
+      return;
+    }
+
     const checkSupabaseConfig = async () => {
       try {
         const { data, error } = await supabase.from('user_roles').select('count');
-        if (error && error.message.includes('FetchError')) {
+        if (error) {
+          console.error('Supabase connection error:', error);
           setIsSupabaseConfigured(false);
-          setError('Database connection error. Please check your configuration.');
+          setError(`Database connection error: ${error.message}. Please check your Supabase configuration.`);
         }
       } catch (err) {
         console.error('Supabase check error:', err);
         setIsSupabaseConfigured(false);
-        setError('Failed to connect to the database. Please check your configuration.');
+        setError('Failed to connect to the database. Please check your Supabase configuration.');
       }
     };
 
@@ -190,11 +198,32 @@ export default function App() {
               Configuration Error
             </h1>
             <p className="text-gray-600 dark:text-gray-400 mb-4">
-              The application is not properly configured. Please check your environment variables and database connection.
+              {error || 'The application is not properly configured. Please check your environment variables and database connection.'}
             </p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Contact the administrator for assistance.
-            </p>
+            <div className="mt-6 space-y-4">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Required Environment Variables:
+              </p>
+              <ul className="text-sm text-left space-y-2 bg-gray-50 dark:bg-gray-900 p-4 rounded-md">
+                <li className="flex items-center">
+                  <span className="font-mono bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded">VITE_SUPABASE_URL</span>
+                  <span className="ml-2">- Your Supabase project URL</span>
+                </li>
+                <li className="flex items-center">
+                  <span className="font-mono bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded">VITE_SUPABASE_ANON_KEY</span>
+                  <span className="ml-2">- Your Supabase anonymous key</span>
+                </li>
+              </ul>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                These can be found in your Supabase project settings under Project Settings > API.
+              </p>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 w-full"
+              >
+                Reload Application
+              </button>
+            </div>
           </div>
         </div>
       </div>
