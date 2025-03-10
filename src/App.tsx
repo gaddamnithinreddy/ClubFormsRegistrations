@@ -20,6 +20,26 @@ export default function App() {
   const isDarkMode = useThemeStore((state) => state.isDarkMode);
   const [isInitializing, setIsInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isSupabaseConfigured, setIsSupabaseConfigured] = useState(true);
+
+  // Check Supabase configuration
+  useEffect(() => {
+    const checkSupabaseConfig = async () => {
+      try {
+        const { data, error } = await supabase.from('user_roles').select('count');
+        if (error && error.message.includes('FetchError')) {
+          setIsSupabaseConfigured(false);
+          setError('Database connection error. Please check your configuration.');
+        }
+      } catch (err) {
+        console.error('Supabase check error:', err);
+        setIsSupabaseConfigured(false);
+        setError('Failed to connect to the database. Please check your configuration.');
+      }
+    };
+
+    checkSupabaseConfig();
+  }, []);
 
   // Memoize route elements to prevent unnecessary re-renders
   const routeElements = useMemo(() => ({
@@ -40,6 +60,10 @@ export default function App() {
 
     const initAuth = async () => {
       try {
+        if (!isSupabaseConfigured) {
+          throw new Error('Database is not properly configured');
+        }
+
         // Check if we have a session
         const { data: { session } } = await supabase.auth.getSession();
         console.log('Session Check Result:', {
@@ -93,7 +117,7 @@ export default function App() {
         console.log('Forcing initialization completion after timeout');
         setIsInitializing(false);
       }
-    }, 3000); // Reduced to 3 seconds
+    }, 3000);
 
     // Start initialization
     initAuth();
@@ -145,7 +169,7 @@ export default function App() {
       clearTimeout(initTimeout);
       subscription.unsubscribe();
     };
-  }, [setRole]);
+  }, [setRole, isSupabaseConfigured]);
 
   // Theme effect with performance optimization
   useEffect(() => {
@@ -156,6 +180,26 @@ export default function App() {
       root.classList.remove('dark');
     }
   }, [isDarkMode]);
+
+  if (!isSupabaseConfigured) {
+    return (
+      <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 ${isDarkMode ? 'dark' : ''}`}>
+        <div className="min-h-screen flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 text-center">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+              Configuration Error
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              The application is not properly configured. Please check your environment variables and database connection.
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Contact the administrator for assistance.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isInitializing) {
     console.log('App: Rendering loading state...');
