@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { UserRole } from './types';
 
 interface AuthState {
@@ -13,26 +13,42 @@ interface ThemeState {
   toggleTheme: () => void;
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set) => ({
-      role: null,
-      setRole: (role) => set({ role }),
-      clearRole: () => set({ role: null }),
-    }),
-    {
-      name: 'auth-storage',
-      partialize: (state) => ({ role: state.role }),
-    }
-  )
-);
+// Initialize stores after React is loaded
+const initializeStores = () => {
+  const authStore = create<AuthState>()(
+    persist(
+      (set) => ({
+        role: null,
+        setRole: (role) => set({ role }),
+        clearRole: () => set({ role: null }),
+      }),
+      {
+        name: 'auth-storage',
+        storage: createJSONStorage(() => localStorage),
+        partialize: (state) => ({ role: state.role }),
+      }
+    )
+  );
 
-export const useThemeStore = create<ThemeState>()(
-  persist(
-    (set) => ({
-      isDarkMode: window.matchMedia('(prefers-color-scheme: dark)').matches,
-      toggleTheme: () => set((state) => ({ isDarkMode: !state.isDarkMode })),
-    }),
-    { name: 'theme-storage' }
-  )
-);
+  const themeStore = create<ThemeState>()(
+    persist(
+      (set) => ({
+        isDarkMode: typeof window !== 'undefined' 
+          ? window.matchMedia('(prefers-color-scheme: dark)').matches 
+          : false,
+        toggleTheme: () => set((state) => ({ isDarkMode: !state.isDarkMode })),
+      }),
+      {
+        name: 'theme-storage',
+        storage: createJSONStorage(() => localStorage),
+      }
+    )
+  );
+
+  return { authStore, themeStore };
+};
+
+const stores = initializeStores();
+
+export const useAuthStore = stores.authStore;
+export const useThemeStore = stores.themeStore;

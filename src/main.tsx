@@ -1,11 +1,15 @@
 import React from 'react';
-import { createRoot } from 'react-dom/client';
+import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import './styles/animations.css';
 
+// Ensure React is available globally
+window.React = React;
+
 console.log('Main script execution started');
 console.log('React version:', React.version);
+console.log('React available globally:', !!window.React?.createElement);
 
 try {
   const container = document.getElementById('root');
@@ -19,7 +23,7 @@ try {
   container.innerHTML = '';
 
   console.log('Creating React root');
-  const root = createRoot(container);
+  const root = ReactDOM.createRoot(container);
 
   console.log('Starting React render');
   root.render(

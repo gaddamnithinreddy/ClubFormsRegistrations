@@ -5,9 +5,7 @@ import tailwindcss from 'tailwindcss';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react({
-    jsxRuntime: 'classic'
-  })],
+  plugins: [react()],
   optimizeDeps: {
     include: [
       'react',
@@ -26,6 +24,7 @@ export default defineConfig({
     cssMinify: false,
     cssCodeSplit: true,
     rollupOptions: {
+      external: ['react', 'react-dom', 'react/jsx-runtime'],
       output: {
         assetFileNames: (info) => {
           const name = info.name || '';
@@ -36,28 +35,13 @@ export default defineConfig({
         },
         chunkFileNames: 'assets/js/[name]-[hash].js',
         entryFileNames: 'assets/js/[name]-[hash].js',
-        manualChunks: (id) => {
-          if (id.includes('node_modules')) {
-            if (id.includes('react/') || id.includes('react-dom/') || id.includes('react/jsx-runtime')) {
-              return 'react-vendor';
-            }
-            if (id.includes('react-router-dom')) {
-              return 'router-vendor';
-            }
-            if (id.includes('framer-motion')) {
-              return 'ui-vendor';
-            }
-            if (id.includes('lucide-react')) {
-              return 'icons-vendor';
-            }
-            if (id.includes('@tiptap')) {
-              return 'tiptap-vendor';
-            }
-            if (id.includes('dompurify') || id.includes('qrcode.react') || id.includes('date-fns')) {
-              return 'utils-vendor';
-            }
-            return 'vendor';
-          }
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react/jsx-runtime'],
+          'router-vendor': ['react-router-dom'],
+          'ui-vendor': ['framer-motion'],
+          'icons-vendor': ['lucide-react'],
+          'tiptap-vendor': ['@tiptap/react', '@tiptap/starter-kit', '@tiptap/extension-placeholder'],
+          'utils-vendor': ['dompurify', 'qrcode.react', 'date-fns']
         }
       }
     }
