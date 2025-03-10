@@ -37,6 +37,22 @@
         100% { transform: rotate(360deg); }
       }
     </style>
+    <script>
+      // Add debugging information
+      console.log('Initial page load started');
+      window.addEventListener('load', function() {
+        console.log('Window load event fired');
+      });
+      window.addEventListener('error', function(event) {
+        console.error('Global error:', event.error);
+      });
+      // Check if the script loads
+      window.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM Content loaded');
+        const script = document.querySelector('script[type="module"]');
+        console.log('Main script element:', script?.src);
+      });
+    </script>
   </head>
   <body>
     <div id="root">
@@ -44,8 +60,20 @@
       <div id="loading-screen">
         <div class="loading-spinner"></div>
         <div>Loading Club Forms & Registrations...</div>
+        <div id="load-status" style="font-size: 0.875rem; color: #6b7280;"></div>
       </div>
     </div>
+    <script>
+      // Add status updates
+      const statusEl = document.getElementById('load-status');
+      let dots = '';
+      setInterval(() => {
+        dots = dots.length >= 3 ? '' : dots + '.';
+        if (statusEl) {
+          statusEl.textContent = 'Initializing application' + dots;
+        }
+      }, 500);
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
