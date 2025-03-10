@@ -5,10 +5,14 @@ import tailwindcss from 'tailwindcss';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react({
+    jsxRuntime: 'classic'
+  })],
   optimizeDeps: {
-    exclude: ['lucide-react'],
     include: [
+      'react',
+      'react-dom',
+      'react/jsx-runtime',
       '@tiptap/react',
       '@tiptap/starter-kit',
       '@tiptap/extension-placeholder',
@@ -34,7 +38,7 @@ export default defineConfig({
         entryFileNames: 'assets/js/[name]-[hash].js',
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
-            if (id.includes('react/') || id.includes('react-dom/')) {
+            if (id.includes('react/') || id.includes('react-dom/') || id.includes('react/jsx-runtime')) {
               return 'react-vendor';
             }
             if (id.includes('react-router-dom')) {
