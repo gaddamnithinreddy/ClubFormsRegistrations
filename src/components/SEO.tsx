@@ -23,9 +23,9 @@ export const SEO: React.FC<SEOProps> = ({
   const currentPath = location.pathname;
 
   // Default values
-  const defaultTitle = 'Club Forms & Registrations';
-  const defaultDescription = 'Create and manage club registration forms, events, and member signups easily.';
-  const defaultKeywords = 'club forms, registration, events, members, signup';
+  const defaultTitle = 'Club Forms & Registrations | Create and Manage Club Registration Forms';
+  const defaultDescription = 'Create and manage club registration forms, membership applications, event signups, and club management tools. Easy-to-use form builder for clubs, organizations, and associations.';
+  const defaultKeywords = 'club forms, club registration form, membership registration, club membership form, event registration, club management system, online registration form, club signup form, organization registration';
   const defaultImage = '/logo.png'; // Assuming you have a logo image in the public folder
   const defaultUrl = 'https://clubforms.com'; // Replace with your actual domain
 
@@ -34,41 +34,41 @@ export const SEO: React.FC<SEOProps> = ({
     switch (currentPath) {
       case '/auth':
         return {
-          title: 'Sign In | Club Forms',
-          description: 'Sign in or create an account to manage your club forms and registrations.',
-          keywords: 'login, signup, authentication, club forms'
+          title: 'Sign In | Club Forms & Registrations',
+          description: 'Sign in to create and manage your club registration forms, membership applications, and event signups.',
+          keywords: 'club forms login, registration system login, club management signin'
         };
       case '/role':
         return {
-          title: 'Select Role | Club Forms',
-          description: 'Choose your role to access the appropriate features and permissions.',
-          keywords: 'roles, permissions, club management'
+          title: 'Select Role | Club Forms & Registrations',
+          description: 'Choose your role to manage club forms, handle registrations, and oversee club membership applications.',
+          keywords: 'club administrator, form manager, registration handler, club management roles'
         };
       case '/dashboard':
         return {
-          title: 'Dashboard | Club Forms',
-          description: 'View and manage your forms, submissions, and club activities.',
-          keywords: 'dashboard, forms, submissions, management'
+          title: 'Dashboard | Club Forms & Registrations',
+          description: 'Manage your club registration forms, view submissions, track memberships, and organize club events all in one place.',
+          keywords: 'club dashboard, registration management, form submissions, membership tracking'
         };
       case '/forms/new':
         return {
-          title: 'Create Form | Club Forms',
-          description: 'Create a new form for your club events, registrations, or member signups.',
-          keywords: 'create form, form builder, club events'
+          title: 'Create Club Registration Form | Club Forms & Registrations',
+          description: 'Build custom registration forms for your club events, membership applications, and signups with our easy-to-use form builder.',
+          keywords: 'create club form, registration form builder, membership form creator, club signup form'
         };
       default:
         if (currentPath.startsWith('/forms/') && currentPath.endsWith('/respond')) {
           return {
-            title: 'Form Response | Club Forms',
-            description: 'Submit your response to the club form.',
-            keywords: 'form response, submission, signup'
+            title: 'Club Registration Form | Club Forms & Registrations',
+            description: 'Submit your club registration, membership application, or event signup form.',
+            keywords: 'club registration, form submission, membership application, event signup'
           };
         }
         if (currentPath.startsWith('/forms/')) {
           return {
-            title: 'View Form | Club Forms',
-            description: 'View and manage your club form details and responses.',
-            keywords: 'view form, form details, responses'
+            title: 'View Club Form | Club Forms & Registrations',
+            description: 'View and manage your club registration form details, responses, and submissions.',
+            keywords: 'view club form, registration responses, form management, submission tracking'
           };
         }
         return {

@@ -1,0 +1,12 @@
+# Allow all web crawlers to access all content
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://clubforms.com/sitemap.xml
+
+# Specify important pages for crawling
+Allow: /auth
+Allow: /dashboard
+Allow: /forms/*
+Allow: /role 
