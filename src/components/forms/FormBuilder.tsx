@@ -89,7 +89,9 @@ export function FormBuilder() {
 
   const validateDates = (startDate: string, endDate: string) => {
     if (!startDate || !endDate) return true;
-    return new Date(endDate) > new Date(startDate);
+    const start = new Date(startDate).getTime();
+    const end = new Date(endDate).getTime();
+    return end > start;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -222,27 +224,43 @@ export function FormBuilder() {
   const handleBannerUpload = async (file: File) => {
     if (!file) return;
     
+    // Clear any previous errors
+    setError(null);
+    
     // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      setError('Image is too large. Maximum size is 5MB.');
+      setError('Banner image is too large. Maximum size is 5MB.');
       return;
     }
     
     // Validate file type
     if (!file.type.startsWith('image/')) {
-      setError('Only image files are allowed.');
+      setError('Only image files are allowed for the banner.');
+      return;
+    }
+
+    // Additional image type validation
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setError('Only JPEG, PNG, GIF, and WebP images are allowed.');
       return;
     }
     
     try {
       setLoading(true);
       const imageUrl = await uploadImage(file);
+      if (!imageUrl) {
+        throw new Error('Failed to get URL for uploaded banner image');
+      }
       setFormData(prev => ({ ...prev, banner_image: imageUrl }));
       setBannerFile(file);
       setError(null);
     } catch (error) {
       console.error('Banner upload error:', error);
-      setError('Failed to upload banner image. Please try again.');
+      setError(error instanceof Error ? error.message : 'Failed to upload banner image. Please try again.');
+      // Reset the banner state on error
+      setFormData(prev => ({ ...prev, banner_image: '' }));
+      setBannerFile(null);
     } finally {
       setLoading(false);
     }
