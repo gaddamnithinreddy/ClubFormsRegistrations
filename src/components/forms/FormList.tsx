@@ -136,19 +136,19 @@ export function FormList() {
           </p>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 px-4 sm:px-0">
           {forms.map((form) => (
             <Link
               key={form.id}
               to={`/forms/${form.id}`}
-              className="block bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow"
+              className="block bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 sm:p-6 hover:shadow-md transition-shadow relative overflow-hidden"
             >
               {form.banner_image && (
-                <div className="mb-4 -mt-6 -mx-6">
+                <div className="mb-4 -mt-4 sm:-mt-6 -mx-4 sm:-mx-6">
                   <img
                     src={form.banner_image}
                     alt={form.title}
-                    className="w-full h-32 object-cover rounded-t-lg"
+                    className="w-full h-24 sm:h-32 object-cover rounded-t-lg"
                     onError={(e) => {
                       console.error('Image failed to load:', form.banner_image);
                       e.currentTarget.style.display = 'none';
@@ -156,7 +156,7 @@ export function FormList() {
                   />
                 </div>
               )}
-              <h2 className="text-xl font-semibold mb-2 dark:text-white truncate overflow-hidden"
+              <h2 className="text-lg sm:text-xl font-semibold mb-2 dark:text-white truncate overflow-hidden"
                   dangerouslySetInnerHTML={{ __html: sanitizeHtml(form.title) }}>
               </h2>
               
@@ -171,7 +171,7 @@ export function FormList() {
               
               {form.description && (
                 <div 
-                  className="text-gray-600 dark:text-gray-400 line-clamp-2 overflow-hidden max-h-12"
+                  className="text-gray-600 dark:text-gray-400 line-clamp-2 overflow-hidden text-sm sm:text-base"
                   dangerouslySetInnerHTML={{ __html: sanitizeHtml(form.description) }}
                 />
               )}
@@ -185,7 +185,7 @@ export function FormList() {
                 showMoreIndicator={true}
               />
               
-              <div className="mt-4 text-sm text-gray-500 dark:text-gray-500">
+              <div className="mt-4 text-xs sm:text-sm text-gray-500 dark:text-gray-500">
                 Created {new Date(form.created_at).toLocaleDateString()}
               </div>
             </Link>
