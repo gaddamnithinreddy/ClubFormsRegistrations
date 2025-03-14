@@ -19,6 +19,7 @@ export function FormResponse() {
   const [submitted, setSubmitted] = useState(false);
   const [responses, setResponses] = useState<Record<string, any>>({});
   const [imageUploads, setImageUploads] = useState<Record<string, File>>({});
+  const [uploadingImages, setUploadingImages] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | React.ReactNode | null>(null);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -139,10 +140,14 @@ export function FormResponse() {
     };
   }, [id]);
 
-  const handleImageFieldUpload = async (fieldId: string, file: File) => {
+  const handleImageFieldUpload = async (fieldId: string, file: File, e: React.ChangeEvent<HTMLInputElement>) => {
     try {
-      // Show uploading state
-      setSubmitting(true);
+      // Prevent form submission
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Show uploading state for this specific field
+      setUploadingImages(prev => ({ ...prev, [fieldId]: true }));
       setError(null);
 
       // Validate file size (5MB)
@@ -177,7 +182,7 @@ export function FormResponse() {
       // Set a more specific error message
       setError(err instanceof Error ? err.message : 'Failed to upload image. Please try again.');
     } finally {
-      setSubmitting(false);
+      setUploadingImages(prev => ({ ...prev, [fieldId]: false }));
     }
   };
 
@@ -487,21 +492,31 @@ export function FormResponse() {
                   ) : field.type === 'image' ? (
                     <div className="space-y-2 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
                       <label className="flex flex-col items-center px-4 py-6 bg-white dark:bg-gray-700 text-blue-500 dark:text-blue-400 rounded-lg border-2 border-dashed border-blue-300 dark:border-blue-600 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        <span className="mt-2 text-sm">
-                          {imageUploads[field.id] ? imageUploads[field.id].name : 'Click to upload an image (max 5MB)'}
-                        </span>
+                        {uploadingImages[field.id] ? (
+                          <>
+                            <Loader className="animate-spin h-10 w-10 mb-2" />
+                            <span className="mt-2 text-sm">Uploading image...</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span className="mt-2 text-sm">
+                              {imageUploads[field.id] ? imageUploads[field.id].name : 'Click to upload an image (max 5MB)'}
+                            </span>
+                          </>
+                        )}
                         <input
                           type="file"
                           accept="image/*"
                           required={field.required}
                           className="hidden"
+                          disabled={uploadingImages[field.id]}
                           onChange={(e) => {
                             const file = e.target.files?.[0];
                             if (file) {
-                              handleImageFieldUpload(field.id, file);
+                              handleImageFieldUpload(field.id, file, e);
                             }
                           }}
                         />
