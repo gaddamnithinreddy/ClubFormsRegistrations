@@ -139,47 +139,55 @@ export function FormResponse() {
     };
   }, [id]);
 
+  const handleImageFieldUpload = async (fieldId: string, file: File) => {
+    try {
+      // Show uploading state
+      setSubmitting(true);
+      setError(null);
+
+      // Validate file size (5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        throw new Error('Image size must be less than 5MB');
+      }
+
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        throw new Error('Only image files are allowed');
+      }
+
+      // Store the file in the imageUploads state first
+      setImageUploads(prev => ({ ...prev, [fieldId]: file }));
+      
+      // Upload the image
+      const imageUrl = await uploadImage(file);
+      
+      // Update responses with the image URL
+      setResponses(prev => ({ ...prev, [fieldId]: imageUrl }));
+      
+      // Clear any previous error
+      setError(null);
+    } catch (err) {
+      console.error('Error handling image upload:', err);
+      // Remove the file from imageUploads if upload failed
+      setImageUploads(prev => {
+        const newUploads = { ...prev };
+        delete newUploads[fieldId];
+        return newUploads;
+      });
+      // Set a more specific error message
+      setError(err instanceof Error ? err.message : 'Failed to upload image. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
 
-    // Check for required fields
-    const missingRequiredFields = form?.fields
-      .filter(field => field.required)
-      .filter(field => {
-        const value = responses[field.id];
-        if (field.type === 'multiselect') {
-          return !value || (Array.isArray(value) && value.length === 0);
-        }
-        if (field.type === 'image') {
-          return !imageUploads[field.id];
-        }
-        return !value;
-      });
-
-    if (missingRequiredFields && missingRequiredFields.length > 0) {
-      setError(
-        <div className="space-y-2">
-          <p className="font-medium">Please fill in all required fields:</p>
-          <ul className="list-disc list-inside space-y-1">
-            {missingRequiredFields.map(field => {
-              // Strip HTML tags from field label
-              const plainLabel = field.label.replace(/<[^>]*>/g, '');
-              return (
-                <li key={field.id} className="text-red-600 dark:text-red-400">
-                  {plainLabel}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      );
-      setSubmitting(false);
-      return;
-    }
-
     try {
+      // First check if the form is still accepting responses
       const { data: formData, error: formError } = await supabase
         .from('forms')
         .select('accepting_responses')
@@ -191,7 +199,22 @@ export function FormResponse() {
         throw new Error('This form is currently closed for responses');
       }
 
-      // Clean responses by removing HTML tags from any string values
+      // Check for required fields
+      const missingRequiredFields = form?.fields
+        .filter(field => field.required)
+        .filter(field => {
+          const value = responses[field.id];
+          if (field.type === 'multiselect') {
+            return !value || (Array.isArray(value) && value.length === 0);
+          }
+          return !value;
+        });
+
+      if (missingRequiredFields && missingRequiredFields.length > 0) {
+        throw new Error('Please fill in all required fields');
+      }
+
+      // Clean responses
       const cleanedResponses = { ...responses };
       Object.keys(cleanedResponses).forEach(key => {
         if (typeof cleanedResponses[key] === 'string') {
@@ -203,22 +226,15 @@ export function FormResponse() {
         }
       });
 
-      const imageResponses = { ...cleanedResponses };
-      for (const [fieldId, file] of Object.entries(imageUploads)) {
-        const imageUrl = await uploadImage(file);
-        imageResponses[fieldId] = imageUrl;
-      }
-
       let userId;
       
       // Check if user is already signed in
       const { data: { session } } = await supabase.auth.getSession();
       
       if (session?.user) {
-        // Use existing user ID if signed in
         userId = session.user.id;
       } else {
-        // Create anonymous user if not signed in
+        // Create anonymous user
         const anonymousEmail = `anonymous_${Date.now()}@temp.com`;
         const anonymousPassword = `temp_${Math.random().toString(36).slice(2)}`;
         
@@ -233,42 +249,29 @@ export function FormResponse() {
         userId = user.id;
       }
 
+      // Submit the form response
       const { error: submitError } = await supabase
         .from('form_responses')
         .insert([{
           form_id: id,
           user_id: userId,
-          responses: imageResponses
+          responses: cleanedResponses
         }]);
 
       if (submitError) throw submitError;
-      setSubmitted(true);
       
-      // Clear saved form data after successful submission
+      setSubmitted(true);
       localStorage.removeItem(`form_${id}_responses`);
 
-      // Only sign out if we created a temporary user
+      // Sign out temporary user
       if (!session?.user) {
         await supabase.auth.signOut();
       }
     } catch (error) {
-      console.error('Error submitting response:', error);
-      setError(error instanceof Error ? error.message : 'Failed to submit response');
+      console.error('Error submitting form:', error);
+      setError(error instanceof Error ? error.message : 'Failed to submit form');
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const handleImageFieldUpload = async (fieldId: string, file: File) => {
-    try {
-      // Store the file in the imageUploads state
-      setImageUploads(prev => ({ ...prev, [fieldId]: file }));
-      
-      // Also set the file name in responses to show it's been selected
-      setResponses(prev => ({ ...prev, [fieldId]: file.name }));
-    } catch (err) {
-      console.error('Error handling image upload:', err);
-      setError('Failed to process image. Please try again.');
     }
   };
 
@@ -498,20 +501,7 @@ export function FormResponse() {
                           onChange={(e) => {
                             const file = e.target.files?.[0];
                             if (file) {
-                              // Check file size (5MB = 5 * 1024 * 1024 bytes)
-                              if (file.size > 5 * 1024 * 1024) {
-                                setError(
-                                  <div className="space-y-2">
-                                    <p className="font-medium">File too large:</p>
-                                    <p>The image "{file.name}" exceeds the maximum size of 5MB. Please select a smaller image.</p>
-                                  </div>
-                                );
-                                return;
-                              }
-                              
                               handleImageFieldUpload(field.id, file);
-                              // Clear any previous error
-                              if (error) setError(null);
                             }
                           }}
                         />
