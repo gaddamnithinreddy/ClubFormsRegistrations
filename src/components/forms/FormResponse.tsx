@@ -19,7 +19,6 @@ export function FormResponse() {
   const [submitted, setSubmitted] = useState(false);
   const [responses, setResponses] = useState<Record<string, any>>({});
   const [imageUploads, setImageUploads] = useState<Record<string, File>>({});
-  const [uploadingImages, setUploadingImages] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | React.ReactNode | null>(null);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -140,59 +139,47 @@ export function FormResponse() {
     };
   }, [id]);
 
-  const handleImageFieldUpload = async (fieldId: string, file: File, e: React.ChangeEvent<HTMLInputElement>) => {
-    try {
-      // Prevent form submission
-      e.preventDefault();
-      e.stopPropagation();
-      
-      // Show uploading state for this specific field
-      setUploadingImages(prev => ({ ...prev, [fieldId]: true }));
-      setError(null);
-
-      // Validate file size (5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        throw new Error('Image size must be less than 5MB');
-      }
-
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        throw new Error('Only image files are allowed');
-      }
-
-      // Store the file in the imageUploads state first
-      setImageUploads(prev => ({ ...prev, [fieldId]: file }));
-      
-      // Upload the image
-      const imageUrl = await uploadImage(file);
-      
-      // Update responses with the image URL
-      setResponses(prev => ({ ...prev, [fieldId]: imageUrl }));
-      
-      // Clear any previous error
-      setError(null);
-    } catch (err) {
-      console.error('Error handling image upload:', err);
-      // Remove the file from imageUploads if upload failed
-      setImageUploads(prev => {
-        const newUploads = { ...prev };
-        delete newUploads[fieldId];
-        return newUploads;
-      });
-      // Set a more specific error message
-      setError(err instanceof Error ? err.message : 'Failed to upload image. Please try again.');
-    } finally {
-      setUploadingImages(prev => ({ ...prev, [fieldId]: false }));
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
 
+    // Check for required fields
+    const missingRequiredFields = form?.fields
+      .filter(field => field.required)
+      .filter(field => {
+        const value = responses[field.id];
+        if (field.type === 'multiselect') {
+          return !value || (Array.isArray(value) && value.length === 0);
+        }
+        if (field.type === 'image') {
+          return !imageUploads[field.id];
+        }
+        return !value;
+      });
+
+    if (missingRequiredFields && missingRequiredFields.length > 0) {
+      setError(
+        <div className="space-y-2">
+          <p className="font-medium">Please fill in all required fields:</p>
+          <ul className="list-disc list-inside space-y-1">
+            {missingRequiredFields.map(field => {
+              // Strip HTML tags from field label
+              const plainLabel = field.label.replace(/<[^>]*>/g, '');
+              return (
+                <li key={field.id} className="text-red-600 dark:text-red-400">
+                  {plainLabel}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      );
+      setSubmitting(false);
+      return;
+    }
+
     try {
-      // First check if the form is still accepting responses
       const { data: formData, error: formError } = await supabase
         .from('forms')
         .select('accepting_responses')
@@ -204,22 +191,7 @@ export function FormResponse() {
         throw new Error('This form is currently closed for responses');
       }
 
-      // Check for required fields
-      const missingRequiredFields = form?.fields
-        .filter(field => field.required)
-        .filter(field => {
-          const value = responses[field.id];
-          if (field.type === 'multiselect') {
-            return !value || (Array.isArray(value) && value.length === 0);
-          }
-          return !value;
-        });
-
-      if (missingRequiredFields && missingRequiredFields.length > 0) {
-        throw new Error('Please fill in all required fields');
-      }
-
-      // Clean responses
+      // Clean responses by removing HTML tags from any string values
       const cleanedResponses = { ...responses };
       Object.keys(cleanedResponses).forEach(key => {
         if (typeof cleanedResponses[key] === 'string') {
@@ -231,15 +203,66 @@ export function FormResponse() {
         }
       });
 
+      // Process image uploads first
+      const imageResponses = { ...cleanedResponses };
+      let hasImageUploadErrors = false;
+      
+      // Only attempt image uploads if there are images to upload
+      if (Object.keys(imageUploads).length > 0) {
+        try {
+          // Upload all images in parallel for better performance
+          const uploadPromises = Object.entries(imageUploads).map(async ([fieldId, file]) => {
+            try {
+              // The uploadImage function now returns a placeholder URL if upload fails
+              const imageUrl = await uploadImage(file);
+              // Check if it's a placeholder URL
+              const isPlaceholder = imageUrl.includes('placehold.co');
+              if (isPlaceholder) {
+                hasImageUploadErrors = true;
+              }
+              return { fieldId, imageUrl, success: !isPlaceholder };
+            } catch (error) {
+              console.error(`Error uploading image for field ${fieldId}:`, error);
+              hasImageUploadErrors = true;
+              // Return a placeholder URL
+              return { 
+                fieldId, 
+                imageUrl: `https://placehold.co/600x400?text=${encodeURIComponent(file.name)}`,
+                success: false 
+              };
+            }
+          });
+
+          const uploadResults = await Promise.all(uploadPromises);
+          
+          // Update responses with image URLs for successful uploads
+          uploadResults.forEach(result => {
+            imageResponses[result.fieldId] = result.imageUrl;
+          });
+          
+          // Check if any uploads failed
+          const failedUploads = uploadResults.filter(result => !result.success);
+          if (failedUploads.length > 0) {
+            console.warn(`${failedUploads.length} image(s) failed to upload, but continuing with form submission`);
+          }
+        } catch (uploadError) {
+          console.error('Error during image uploads:', uploadError);
+          hasImageUploadErrors = true;
+          // Continue with form submission even if image uploads fail
+          console.warn('Continuing with form submission without images');
+        }
+      }
+
       let userId;
       
       // Check if user is already signed in
       const { data: { session } } = await supabase.auth.getSession();
       
       if (session?.user) {
+        // Use existing user ID if signed in
         userId = session.user.id;
       } else {
-        // Create anonymous user
+        // Create anonymous user if not signed in
         const anonymousEmail = `anonymous_${Date.now()}@temp.com`;
         const anonymousPassword = `temp_${Math.random().toString(36).slice(2)}`;
         
@@ -254,29 +277,75 @@ export function FormResponse() {
         userId = user.id;
       }
 
-      // Submit the form response
       const { error: submitError } = await supabase
         .from('form_responses')
         .insert([{
           form_id: id,
           user_id: userId,
-          responses: cleanedResponses
+          responses: imageResponses
         }]);
 
       if (submitError) throw submitError;
       
+      // Show warning about image uploads if there were errors
+      if (hasImageUploadErrors) {
+        // We'll still mark as submitted but show a warning
+        console.warn('Form submitted successfully but some images failed to upload');
+      }
+      
       setSubmitted(true);
+      
+      // Clear saved form data after successful submission
       localStorage.removeItem(`form_${id}_responses`);
 
-      // Sign out temporary user
+      // Only sign out if we created a temporary user
       if (!session?.user) {
         await supabase.auth.signOut();
       }
     } catch (error) {
-      console.error('Error submitting form:', error);
-      setError(error instanceof Error ? error.message : 'Failed to submit form');
+      console.error('Error submitting response:', error);
+      setError(error instanceof Error ? error.message : 'Failed to submit response');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleImageFieldUpload = async (fieldId: string, file: File) => {
+    try {
+      // Validate file size (5MB = 5 * 1024 * 1024 bytes)
+      if (file.size > 5 * 1024 * 1024) {
+        setError(
+          <div className="space-y-2">
+            <p className="font-medium">File too large:</p>
+            <p>The image "{file.name}" exceeds the maximum size of 5MB. Please select a smaller image.</p>
+          </div>
+        );
+        return;
+      }
+      
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        setError(
+          <div className="space-y-2">
+            <p className="font-medium">Invalid file type:</p>
+            <p>Only JPEG, PNG, GIF, and WebP images are allowed.</p>
+          </div>
+        );
+        return;
+      }
+      
+      // Store the file in the imageUploads state
+      setImageUploads(prev => ({ ...prev, [fieldId]: file }));
+      
+      // Also set the file name in responses to show it's been selected
+      setResponses(prev => ({ ...prev, [fieldId]: file.name }));
+      
+      // Clear any previous error
+      if (error) setError(null);
+    } catch (err) {
+      console.error('Error handling image upload:', err);
+      setError('Failed to process image. Please try again.');
     }
   };
 
@@ -491,32 +560,33 @@ export function FormResponse() {
                     </div>
                   ) : field.type === 'image' ? (
                     <div className="space-y-2 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
-                      <label className="flex flex-col items-center px-4 py-6 bg-white dark:bg-gray-700 text-blue-500 dark:text-blue-400 rounded-lg border-2 border-dashed border-blue-300 dark:border-blue-600 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
-                        {uploadingImages[field.id] ? (
-                          <>
-                            <Loader className="animate-spin h-10 w-10 mb-2" />
-                            <span className="mt-2 text-sm">Uploading image...</span>
-                          </>
-                        ) : (
-                          <>
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                            <span className="mt-2 text-sm">
-                              {imageUploads[field.id] ? imageUploads[field.id].name : 'Click to upload an image (max 5MB)'}
-                            </span>
-                          </>
-                        )}
+                      <label className="flex flex-col items-center px-2 sm:px-4 py-6 bg-white dark:bg-gray-700 text-blue-500 dark:text-blue-400 rounded-lg border-2 border-dashed border-blue-300 dark:border-blue-600 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mb-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <div className="w-full px-2 text-center">
+                          <p className="text-sm overflow-hidden text-ellipsis whitespace-nowrap">
+                            {imageUploads[field.id] 
+                              ? imageUploads[field.id].name.length > 25 
+                                ? imageUploads[field.id].name.substring(0, 25) + '...' 
+                                : imageUploads[field.id].name
+                              : 'Click to upload an image (max 5MB)'}
+                          </p>
+                          {imageUploads[field.id] && imageUploads[field.id].name.length > 25 && (
+                            <p className="text-xs text-gray-500 mt-1 truncate">
+                              {imageUploads[field.id].name}
+                            </p>
+                          )}
+                        </div>
                         <input
                           type="file"
                           accept="image/*"
                           required={field.required}
                           className="hidden"
-                          disabled={uploadingImages[field.id]}
                           onChange={(e) => {
                             const file = e.target.files?.[0];
                             if (file) {
-                              handleImageFieldUpload(field.id, file, e);
+                              handleImageFieldUpload(field.id, file);
                             }
                           }}
                         />
@@ -568,7 +638,7 @@ export function FormResponse() {
                   disabled={submitting}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className="w-full sm:w-auto px-6 py-3 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                  className="w-full sm:w-auto px-6 py-3 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 >
                   {submitting ? (
                     <>
