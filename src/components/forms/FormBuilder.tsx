@@ -29,6 +29,7 @@ export function FormBuilder() {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [dateError, setDateError] = useState<string | null>(null);
   const [successData, setSuccessData] = useState<{ formId: string; formUrl: string } | null>(null);
   const [bannerFile, setBannerFile] = useState<File | null>(null);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
@@ -86,6 +87,11 @@ export function FormBuilder() {
     loadExistingForm();
   }, [location.pathname]);
 
+  const validateDates = (startDate: string, endDate: string) => {
+    if (!startDate || !endDate) return true;
+    return new Date(endDate) > new Date(startDate);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title.trim()) {
@@ -96,6 +102,13 @@ export function FormBuilder() {
     if (formData.fields.length === 0) {
       setError('Please add at least one field');
       return;
+    }
+
+    if (formData.event_date && formData.event_end_time) {
+      if (!validateDates(formData.event_date, formData.event_end_time)) {
+        setError('Event end time must be after event start time');
+        return;
+      }
     }
 
     setLoading(true);
@@ -400,7 +413,15 @@ export function FormBuilder() {
                   <input
                     type="datetime-local"
                     value={formData.event_date}
-                    onChange={(e) => setFormData(prev => ({ ...prev, event_date: e.target.value }))}
+                    onChange={(e) => {
+                      const newDate = e.target.value;
+                      setFormData(prev => ({ ...prev, event_date: newDate }));
+                      if (formData.event_end_time && !validateDates(newDate, formData.event_end_time)) {
+                        setDateError('Event end time must be after event start time');
+                      } else {
+                        setDateError(null);
+                      }
+                    }}
                     className="w-full rounded-md border-gray-300 dark:border-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
                     aria-label="Event date and time"
                   />
@@ -413,12 +434,27 @@ export function FormBuilder() {
                   <input
                     type="datetime-local"
                     value={formData.event_end_time}
-                    onChange={(e) => setFormData(prev => ({ ...prev, event_end_time: e.target.value }))}
+                    onChange={(e) => {
+                      const newEndDate = e.target.value;
+                      setFormData(prev => ({ ...prev, event_end_time: newEndDate }));
+                      if (formData.event_date && !validateDates(formData.event_date, newEndDate)) {
+                        setDateError('Event end time must be after event start time');
+                      } else {
+                        setDateError(null);
+                      }
+                    }}
+                    min={formData.event_date}
                     className="w-full rounded-md border-gray-300 dark:border-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
                     aria-label="Event end time"
                   />
                 </div>
               </div>
+
+              {dateError && (
+                <div className="text-red-500 text-sm mt-2">
+                  {dateError}
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
