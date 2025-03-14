@@ -259,6 +259,19 @@ export function FormResponse() {
     }
   };
 
+  const handleImageFieldUpload = async (fieldId: string, file: File) => {
+    try {
+      // Store the file in the imageUploads state
+      setImageUploads(prev => ({ ...prev, [fieldId]: file }));
+      
+      // Also set the file name in responses to show it's been selected
+      setResponses(prev => ({ ...prev, [fieldId]: file.name }));
+    } catch (err) {
+      console.error('Error handling image upload:', err);
+      setError('Failed to process image. Please try again.');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen p-4">
@@ -474,7 +487,9 @@ export function FormResponse() {
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
-                        <span className="mt-2 text-sm">Click to upload an image (max 5MB)</span>
+                        <span className="mt-2 text-sm">
+                          {imageUploads[field.id] ? imageUploads[field.id].name : 'Click to upload an image (max 5MB)'}
+                        </span>
                         <input
                           type="file"
                           accept="image/*"
@@ -494,7 +509,7 @@ export function FormResponse() {
                                 return;
                               }
                               
-                              setImageUploads(prev => ({ ...prev, [field.id]: file }));
+                              handleImageFieldUpload(field.id, file);
                               // Clear any previous error
                               if (error) setError(null);
                             }
@@ -514,6 +529,11 @@ export function FormResponse() {
                               const newUploads = { ...imageUploads };
                               delete newUploads[field.id];
                               setImageUploads(newUploads);
+                              setResponses(prev => {
+                                const newResponses = { ...prev };
+                                delete newResponses[field.id];
+                                return newResponses;
+                              });
                             }}
                             className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
                           >

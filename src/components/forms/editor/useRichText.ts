@@ -94,27 +94,36 @@ export function useRichText(onChange: (value: string) => void, editorId: string)
   }, [editorId, onChange, updateActiveStyles]);
 
   const handleImageUpload = useCallback((url: string) => {
-    const editor = document.getElementById(editorId);
+    const editor = editorRef.current;
     if (!editor) return;
     
-    editor.focus();
-    document.execCommand('insertImage', false, url);
+    // Create a new image element
+    const img = document.createElement('img');
+    img.src = url;
+    img.style.maxWidth = '100%';
+    img.style.height = 'auto';
+    img.style.display = 'block';
+    img.style.margin = '10px 0';
     
-    if (editorRef.current) {
-      // Ensure image is properly inserted
-      const images = editorRef.current.getElementsByTagName('img');
-      if (images.length > 0) {
-        // Set some default styling for the image
-        const lastImage = images[images.length - 1];
-        lastImage.style.maxWidth = '100%';
-        lastImage.style.height = 'auto';
-        lastImage.style.display = 'block';
-        lastImage.style.margin = '10px 0';
-      }
-      
-      onChange(editorRef.current.innerHTML);
+    // Focus the editor
+    editor.focus();
+    
+    // Get the current selection or create a new one at the end
+    const selection = window.getSelection();
+    const range = selection?.rangeCount ? selection.getRangeAt(0) : document.createRange();
+    
+    if (!editor.contains(range.commonAncestorContainer)) {
+      // If selection is outside editor, append to the end
+      editor.appendChild(img);
+    } else {
+      // Insert at current selection
+      range.insertNode(img);
+      range.collapse(false);
     }
-  }, [editorId, onChange]);
+    
+    // Update content
+    onChange(editor.innerHTML);
+  }, [editorRef, onChange]);
 
   const removeImage = useCallback((img: HTMLImageElement) => {
     img.remove();

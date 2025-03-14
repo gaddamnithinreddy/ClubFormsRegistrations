@@ -83,7 +83,15 @@ export function ExtractedImages({
   showMoreIndicator = false,
   altPrefix = 'Image'
 }: ExtractedImagesProps): React.ReactNode {
-  const images = extractImagesFromHtml(html);
+  // Only extract images that are not already in img tags
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = sanitizeHtml(html || '');
+  
+  // Remove any img tags that are already in preview containers
+  const previewContainers = tempDiv.querySelectorAll('.image-preview-container');
+  previewContainers.forEach(container => container.remove());
+  
+  const images = extractImagesFromHtml(tempDiv.innerHTML);
   
   if (images.length === 0) {
     return null;
@@ -98,7 +106,7 @@ export function ExtractedImages({
       {displayImages.map((src, index) => (
         <div 
           key={`${src}-${index}`} 
-          className="border border-gray-200 dark:border-gray-700 rounded-lg p-1 bg-white dark:bg-gray-800 inline-block"
+          className="image-preview-container border border-gray-200 dark:border-gray-700 rounded-lg p-1 bg-white dark:bg-gray-800 inline-block"
         >
           <img
             src={src}

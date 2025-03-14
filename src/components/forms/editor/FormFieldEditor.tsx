@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { Trash2, MoveUp, MoveDown, Image as ImageIcon, X, AlertCircle } from 'lucide-react';
+import { Trash2, MoveUp, MoveDown, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FormField } from '../../../lib/types';
 import { RichTextEditor } from './RichTextEditor';
 import { OptionsInput } from '../inputs/OptionsInput';
-import { uploadImage } from '../../../lib/utils/storage';
 import { ExtractedImages } from '../../../lib/utils/imageExtractor';
 import { sanitizeHtml } from '../../../lib/utils/sanitize';
 import { supabase } from '../../../lib/supabase';
@@ -43,60 +42,6 @@ export function FormFieldEditor({
 
   const handleOptionsChange = (value: string[]) => {
     onUpdate({ options: value });
-  };
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Image is too large. Maximum size is 5MB.');
-      return;
-    }
-    
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      setError('Only image files are allowed.');
-      return;
-    }
-
-    try {
-      setUploading(true);
-      setError(null);
-      
-      // Create a unique file name
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${uuidv4()}.${fileExt}`;
-      const filePath = `form-images/${fileName}`;
-      
-      // Upload the file to Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from('public')
-        .upload(filePath, file);
-        
-      if (uploadError) {
-        throw uploadError;
-      }
-      
-      // Get the public URL
-      const { data } = supabase.storage
-        .from('public')
-        .getPublicUrl(filePath);
-        
-      // Update the field with the image URL
-      onUpdate({ ...field, image: data.publicUrl });
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      setError('Error uploading image. Please try again.');
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const removeImage = () => {
-    onUpdate({ ...field, image: undefined });
-    setError(null);
   };
 
   // Helper function to determine if we should show extracted images
@@ -156,49 +101,6 @@ export function FormFieldEditor({
               />
             </div>
           )}
-          
-          <div className="mt-2">
-            {field.image ? (
-              <div className="relative inline-block">
-                <img
-                  src={field.image}
-                  alt="Field label image"
-                  className="h-16 sm:h-20 w-16 sm:w-20 object-cover rounded"
-                />
-                <button
-                  type="button"
-                  onClick={removeImage}
-                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                  aria-label="Remove image"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <label className="cursor-pointer flex items-center gap-1 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">
-                  <ImageIcon size={14} className="sm:w-4 sm:h-4" />
-                  Add Image
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    aria-label="Upload image"
-                  />
-                </label>
-                {uploading && (
-                  <span className="flex items-center text-xs sm:text-sm text-gray-500">
-                    <svg className="animate-spin -ml-1 mr-2 h-3 w-3 sm:h-4 sm:w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Uploading...
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
         </div>
         
         <div className="flex gap-1 sm:gap-2 w-full sm:w-auto justify-end mt-2 sm:mt-0">

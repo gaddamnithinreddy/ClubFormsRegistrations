@@ -4,6 +4,7 @@ import { useRichText } from './useRichText';
 import { ImageUploader } from './ImageUploader';
 import { X, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { uploadImage } from '../../../lib/utils/storage';
 
 interface RichTextEditorProps {
   label?: string;
@@ -87,27 +88,24 @@ export function RichTextEditor({
       setUploading(true);
       setError(null);
       
-      // Convert file to URL using FileReader
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        if (reader.result && typeof reader.result === 'string') {
-          try {
-            await handleImageUpload(reader.result);
-            
-            // Update the list of images after upload
-            if (editorRef.current) {
-              setEditorImages(Array.from(editorRef.current.getElementsByTagName('img')));
-            }
-          } catch (err) {
-            console.error('Error inserting image:', err);
-            setError('Failed to insert image. Please try again.');
-          }
+      // Upload the image to Supabase storage
+      const imageUrl = await uploadImage(file);
+      
+      // Insert the uploaded image URL into the editor
+      if (imageUrl) {
+        handleImageUpload(imageUrl);
+        
+        // Update the list of images after upload
+        if (editorRef.current) {
+          // Give a small delay to ensure the image is inserted
+          setTimeout(() => {
+            setEditorImages(Array.from(editorRef.current?.getElementsByTagName('img') || []));
+          }, 100);
         }
-      };
-      reader.readAsDataURL(file);
+      }
     } catch (err) {
-      console.error('Error processing image:', err);
-      setError('Failed to process image. Please try again.');
+      console.error('Error uploading image:', err);
+      setError('Failed to upload image. Please try again.');
     } finally {
       setUploading(false);
       setShowImageUpload(false);
