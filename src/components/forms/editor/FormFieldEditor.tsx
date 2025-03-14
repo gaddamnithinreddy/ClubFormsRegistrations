@@ -9,7 +9,6 @@ import { ExtractedImages } from '../../../lib/utils/imageExtractor';
 import { sanitizeHtml } from '../../../lib/utils/sanitize';
 import { supabase } from '../../../lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
-import { ErrorModal } from '../../shared/ErrorModal';
 
 interface FormFieldEditorProps {
   field: FormField;
@@ -28,8 +27,6 @@ export function FormFieldEditor({
 }: FormFieldEditorProps) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showErrorModal, setShowErrorModal] = useState(false);
-  const [errorModalMessage, setErrorModalMessage] = useState('');
 
   const handleLabelChange = (value: string) => {
     onUpdate({ label: value });
@@ -54,15 +51,13 @@ export function FormFieldEditor({
 
     // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      setErrorModalMessage('Image is too large. Maximum size is 5MB.');
-      setShowErrorModal(true);
+      setError('Image is too large. Maximum size is 5MB.');
       return;
     }
     
     // Validate file type
     if (!file.type.startsWith('image/')) {
-      setErrorModalMessage('Only image files are allowed.');
-      setShowErrorModal(true);
+      setError('Only image files are allowed.');
       return;
     }
 
@@ -93,8 +88,7 @@ export function FormFieldEditor({
       onUpdate({ ...field, image: data.publicUrl });
     } catch (error) {
       console.error('Error uploading image:', error);
-      setErrorModalMessage('Error uploading image. Please try again.');
-      setShowErrorModal(true);
+      setError('Error uploading image. Please try again.');
     } finally {
       setUploading(false);
     }
@@ -291,12 +285,6 @@ export function FormFieldEditor({
           />
         </div>
       )}
-
-      <ErrorModal
-        isOpen={showErrorModal}
-        message={errorModalMessage}
-        onClose={() => setShowErrorModal(false)}
-      />
     </motion.div>
   );
 }
