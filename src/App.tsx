@@ -13,8 +13,7 @@ import { NetworkStatus } from './components/shared/NetworkStatus';
 import { NotFound } from './components/NotFound';
 import { useAuthStore, useThemeStore } from './lib/store';
 import { supabase } from './lib/supabase';
-import { Helmet, HelmetProvider } from 'react-helmet-async';
-import { AppRoutes } from './routes';
+import { Helmet } from 'react-helmet-async';
 
 export default function App() {
   const { role, setRole } = useAuthStore();
@@ -58,38 +57,36 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <HelmetProvider>
-        <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 ${isDarkMode ? 'dark' : ''}`}>
-          <Helmet>
-            <title>Form Builder</title>
-            <meta name="description" content="Create and manage forms with our easy-to-use form builder" />
-            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-            <meta name="theme-color" content={isDarkMode ? '#111827' : '#f9fafb'} />
-          </Helmet>
-          
-          <NetworkStatus />
-          <Suspense fallback={<LoadingFallback />}>
-            <BrowserRouter>
-              {role && <Header />}
-              <main className="pt-4">
-                <Routes>
-                  <Route path="/auth" element={<AuthForm />} />
-                  <Route path="/role" element={<RoleSelection />} />
-                  <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/forms/new" element={<FormBuilder />} />
-                  <Route path="/forms/:id/edit" element={<FormBuilder />} />
-                  <Route path="/forms/:id" element={<FormView />} />
-                  <Route path="/forms/:id/respond" element={<FormResponse />} />
-                  <Route path="/" element={
-                    role ? <Navigate to="/dashboard" replace /> : <Navigate to="/auth" replace />
-                  } />
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </main>
-            </BrowserRouter>
-          </Suspense>
-        </div>
-      </HelmetProvider>
+      <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 ${isDarkMode ? 'dark' : ''}`}>
+        <Helmet>
+          <title>Form Builder</title>
+          <meta name="description" content="Create and manage forms with our easy-to-use form builder" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+          <meta name="theme-color" content={isDarkMode ? '#111827' : '#f9fafb'} />
+        </Helmet>
+        
+        <NetworkStatus />
+        <Suspense fallback={<LoadingFallback />}>
+          <BrowserRouter>
+            {role && <Header />}
+            <main className="pt-4">
+              <Routes>
+                <Route path="/auth" element={<AuthForm />} />
+                <Route path="/role" element={<RoleSelection />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/forms/new" element={<FormBuilder />} />
+                <Route path="/forms/:id/edit" element={<FormBuilder />} />
+                <Route path="/forms/:id" element={<FormView />} />
+                <Route path="/forms/:id/respond" element={<FormResponse />} />
+                <Route path="/" element={
+                  role ? <Navigate to="/dashboard" replace /> : <Navigate to="/auth" replace />
+                } />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </main>
+          </BrowserRouter>
+        </Suspense>
+      </div>
     </ErrorBoundary>
   );
 }

@@ -1,10 +1,17 @@
 User-agent: *
 Allow: /
 
-# Sitemap location
-Sitemap: https://clubformsregistrations.vercel.app/sitemap.xml
+# Disallow admin and private routes
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /settings
+Disallow: /profile
 
-# Disallow sensitive routes
-Disallow: /api/
-Disallow: /admin/
-Disallow: /private/ 
+# Allow public form routes
+Allow: /forms/$
+
+# Sitemap location
+Sitemap: https://formflow.app/sitemap.xml
+
+# Crawl-delay
+Crawl-delay: 10 

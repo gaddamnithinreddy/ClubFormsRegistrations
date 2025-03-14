@@ -7,7 +7,7 @@ import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { sanitizeHtml } from '../../lib/utils/sanitize';
 import { ExtractedImages } from '../../lib/utils/imageExtractor';
 
-export default function FormList() {
+export function FormList() {
   const [forms, setForms] = useState<Form[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
