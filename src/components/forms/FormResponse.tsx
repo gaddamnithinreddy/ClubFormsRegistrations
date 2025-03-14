@@ -9,6 +9,7 @@ import { uploadImage } from '../../lib/utils/storage';
 import { sanitizeHtml } from '../../lib/utils/sanitize';
 import { ThemeToggle } from '../ThemeToggle';
 import { ExtractedImages } from '../../lib/utils/imageExtractor';
+import { ErrorModal } from '../shared/ErrorModal';
 
 export function FormResponse() {
   const { id } = useParams<{ id: string }>();
@@ -23,6 +24,8 @@ export function FormResponse() {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUserSignedIn, setIsUserSignedIn] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorModalMessage, setErrorModalMessage] = useState('');
 
   // Check if user is already signed in
   useEffect(() => {
@@ -259,6 +262,23 @@ export function FormResponse() {
     }
   };
 
+  // Update the image upload handler
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, fieldId: string) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Check file size (5MB = 5 * 1024 * 1024 bytes)
+      if (file.size > 5 * 1024 * 1024) {
+        setErrorModalMessage(`The image "${file.name}" exceeds the maximum size of 5MB. Please select a smaller image.`);
+        setShowErrorModal(true);
+        return;
+      }
+      
+      setImageUploads(prev => ({ ...prev, [fieldId]: file }));
+      // Clear any previous error
+      if (error) setError(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen p-4">
@@ -480,25 +500,7 @@ export function FormResponse() {
                           accept="image/*"
                           required={field.required}
                           className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              // Check file size (5MB = 5 * 1024 * 1024 bytes)
-                              if (file.size > 5 * 1024 * 1024) {
-                                setError(
-                                  <div className="space-y-2">
-                                    <p className="font-medium">File too large:</p>
-                                    <p>The image "{file.name}" exceeds the maximum size of 5MB. Please select a smaller image.</p>
-                                  </div>
-                                );
-                                return;
-                              }
-                              
-                              setImageUploads(prev => ({ ...prev, [field.id]: file }));
-                              // Clear any previous error
-                              if (error) setError(null);
-                            }
-                          }}
+                          onChange={(e) => handleImageUpload(e, field.id)}
                         />
                       </label>
                       {imageUploads[field.id] && (
@@ -559,6 +561,13 @@ export function FormResponse() {
           </div>
         </motion.div>
       </div>
+
+      {/* Add the ErrorModal component */}
+      <ErrorModal
+        isOpen={showErrorModal}
+        message={errorModalMessage}
+        onClose={() => setShowErrorModal(false)}
+      />
     </div>
   );
 }

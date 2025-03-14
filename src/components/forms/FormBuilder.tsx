@@ -12,6 +12,7 @@ import { uploadImage } from '../../lib/utils/storage';
 import { useThemeStore } from '../../lib/store';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
+import { ErrorModal } from '../shared/ErrorModal';
 
 export function FormBuilder() {
   const navigate = useNavigate();
@@ -34,6 +35,8 @@ export function FormBuilder() {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const { isDarkMode } = useThemeStore();
   const isEditing = Boolean(formId);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorModalMessage, setErrorModalMessage] = useState('');
 
   // Load existing form data if editing
   useEffect(() => {
@@ -211,13 +214,15 @@ export function FormBuilder() {
     
     // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      setError('Image is too large. Maximum size is 5MB.');
+      setErrorModalMessage('Image is too large. Maximum size is 5MB.');
+      setShowErrorModal(true);
       return;
     }
     
     // Validate file type
     if (!file.type.startsWith('image/')) {
-      setError('Only image files are allowed.');
+      setErrorModalMessage('Only image files are allowed.');
+      setShowErrorModal(true);
       return;
     }
     
@@ -229,7 +234,8 @@ export function FormBuilder() {
       setError(null);
     } catch (error) {
       console.error('Banner upload error:', error);
-      setError('Failed to upload banner image. Please try again.');
+      setErrorModalMessage('Failed to upload banner image. Please try again.');
+      setShowErrorModal(true);
     } finally {
       setLoading(false);
     }
@@ -500,6 +506,12 @@ export function FormBuilder() {
           </div>
         </form>
       </motion.div>
+
+      <ErrorModal
+        isOpen={showErrorModal}
+        message={errorModalMessage}
+        onClose={() => setShowErrorModal(false)}
+      />
     </>
   );
 }
