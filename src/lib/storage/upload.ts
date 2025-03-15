@@ -11,6 +11,22 @@ const MAX_RETRIES = 2;
 
 export async function uploadImage(file: File, retryCount = 0): Promise<string> {
   try {
+    // Check authentication status
+    const { data: { session }, error: authError } = await supabase.auth.getSession();
+    if (authError) {
+      console.error('Auth error:', authError.message);
+      // Try to create an anonymous session if no user is logged in
+      const { data: { user }, error: signUpError } = await supabase.auth.signUp({
+        email: `${uuidv4()}@anonymous.com`,
+        password: uuidv4(),
+      });
+      
+      if (signUpError) {
+        console.error('Failed to create anonymous session:', signUpError.message);
+        return PLACEHOLDER_IMAGE_URL;
+      }
+    }
+
     // Validate file
     const validationError = validateFile(file);
     if (validationError) {
@@ -131,6 +147,13 @@ export async function uploadImage(file: File, retryCount = 0): Promise<string> {
 // Function to try direct upload to a known bucket without checking bucket list
 async function tryDirectUpload(file: File): Promise<string> {
   try {
+    // Check authentication status first
+    const { data: { session }, error: authError } = await supabase.auth.getSession();
+    if (authError || !session) {
+      console.error('Auth error in direct upload:', authError?.message || 'No session');
+      return PLACEHOLDER_IMAGE_URL;
+    }
+
     // Try with the primary bucket from config first
     const bucketName = STORAGE_CONFIG.BUCKET_NAME;
     
