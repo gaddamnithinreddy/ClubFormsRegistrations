@@ -12,8 +12,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true
-  },
-  persistSession: true
+  }
 });
 
 // Add error handling for refresh token failures
@@ -22,7 +21,7 @@ supabase.auth.onAuthStateChange((event, session) => {
     console.log('Token has been refreshed');
   }
   if (event === 'SIGNED_OUT') {
-    // Clear any stored tokens
-    localStorage.removeItem('supabase.auth.token');
+    // Clear any application state if needed
+    console.log('User signed out');
   }
 });
