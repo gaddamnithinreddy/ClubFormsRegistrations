@@ -3,6 +3,13 @@ import { v4 as uuidv4 } from 'uuid';
 import { STORAGE_CONFIG } from './config';
 import { validateFile } from './validation';
 
+export class ImageUploadError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ImageUploadError';
+  }
+}
+
 // Placeholder URL for when image upload fails
 const PLACEHOLDER_IMAGE_URL = 'https://placehold.co/600x400?text=Image+Upload+Failed';
 
@@ -23,7 +30,7 @@ export async function uploadImage(file: File, retryCount = 0): Promise<string> {
       
       if (signUpError) {
         console.error('Failed to create anonymous session:', signUpError.message);
-        return PLACEHOLDER_IMAGE_URL;
+        throw new ImageUploadError('Authentication failed. Please try again.');
       }
     }
 
@@ -31,7 +38,7 @@ export async function uploadImage(file: File, retryCount = 0): Promise<string> {
     const validationError = validateFile(file);
     if (validationError) {
       console.error('File validation error:', validationError);
-      throw new Error(validationError);
+      throw new ImageUploadError(validationError);
     }
 
     // Check if storage is available by listing buckets
@@ -46,8 +53,7 @@ export async function uploadImage(file: File, retryCount = 0): Promise<string> {
         return tryDirectUpload(file);
       }
       
-      console.warn('Storage not available, returning placeholder image');
-      return PLACEHOLDER_IMAGE_URL;
+      throw new ImageUploadError('Storage service unavailable. Please try again later.');
     }
     
     // Log all available buckets for debugging
@@ -103,19 +109,18 @@ export async function uploadImage(file: File, retryCount = 0): Promise<string> {
           
         if (uploadResult.error) {
           console.error('Retry upload error:', uploadResult.error.message);
-          return PLACEHOLDER_IMAGE_URL;
+          throw new ImageUploadError('Failed to upload image after retrying. Please try again.');
         }
       } else if (retryCount < MAX_RETRIES) {
         // Try direct upload as a last resort
         return uploadImage(file, retryCount + 1);
       } else {
-        return PLACEHOLDER_IMAGE_URL;
+        throw new ImageUploadError('Failed to upload image after multiple attempts. Please try again.');
       }
     }
     
     if (!uploadResult.data?.path) {
-      console.error('No path returned from upload');
-      return PLACEHOLDER_IMAGE_URL;
+      throw new ImageUploadError('Upload completed but no file path returned. Please try again.');
     }
     
     // Get public URL
@@ -124,8 +129,7 @@ export async function uploadImage(file: File, retryCount = 0): Promise<string> {
       .getPublicUrl(uploadResult.data.path);
     
     if (!publicUrl) {
-      console.error('Failed to get public URL');
-      return PLACEHOLDER_IMAGE_URL;
+      throw new ImageUploadError('Failed to get public URL for uploaded image. Please try again.');
     }
     
     console.log('Image uploaded successfully:', publicUrl);
@@ -134,13 +138,19 @@ export async function uploadImage(file: File, retryCount = 0): Promise<string> {
   } catch (error) {
     console.error('Image upload error:', error);
     
-    // If we have retries left, try again
-    if (retryCount < MAX_RETRIES) {
+    // If we have retries left and it's not already an ImageUploadError, try again
+    if (retryCount < MAX_RETRIES && !(error instanceof ImageUploadError)) {
       console.log(`Retrying entire upload process (attempt ${retryCount + 1}/${MAX_RETRIES})`);
       return uploadImage(file, retryCount + 1);
     }
     
-    return PLACEHOLDER_IMAGE_URL;
+    // If it's already an ImageUploadError, rethrow it
+    if (error instanceof ImageUploadError) {
+      throw error;
+    }
+    
+    // Otherwise, wrap it in an ImageUploadError
+    throw new ImageUploadError('Failed to upload image. Please try again.');
   }
 }
 
@@ -151,7 +161,7 @@ async function tryDirectUpload(file: File): Promise<string> {
     const { data: { session }, error: authError } = await supabase.auth.getSession();
     if (authError || !session) {
       console.error('Auth error in direct upload:', authError?.message || 'No session');
-      return PLACEHOLDER_IMAGE_URL;
+      throw new ImageUploadError('Authentication required for image upload. Please try again.');
     }
 
     // Try with the primary bucket from config first
@@ -187,26 +197,37 @@ async function tryDirectUpload(file: File): Promise<string> {
           
         if (retryError) {
           console.error('Forms bucket upload error:', retryError.message);
-          return PLACEHOLDER_IMAGE_URL;
+          throw new ImageUploadError('Failed to upload to both buckets. Please try again.');
         }
         
         const { data: { publicUrl } } = supabase.storage
           .from('forms')
           .getPublicUrl(retryData.path);
           
-        return publicUrl || PLACEHOLDER_IMAGE_URL;
+        if (!publicUrl) {
+          throw new ImageUploadError('Failed to get public URL for uploaded image. Please try again.');
+        }
+        
+        return publicUrl;
       }
       
-      return PLACEHOLDER_IMAGE_URL;
+      throw new ImageUploadError('Failed to upload image. Please try again.');
     }
     
     const { data: { publicUrl } } = supabase.storage
       .from(bucketName)
       .getPublicUrl(data.path);
       
-    return publicUrl || PLACEHOLDER_IMAGE_URL;
+    if (!publicUrl) {
+      throw new ImageUploadError('Failed to get public URL for uploaded image. Please try again.');
+    }
+    
+    return publicUrl;
   } catch (error) {
     console.error('Direct upload error:', error);
-    return PLACEHOLDER_IMAGE_URL;
+    if (error instanceof ImageUploadError) {
+      throw error;
+    }
+    throw new ImageUploadError('Failed to upload image. Please try again.');
   }
 }

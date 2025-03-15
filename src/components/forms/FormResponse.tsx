@@ -205,7 +205,7 @@ export function FormResponse() {
 
       // Process image uploads first
       const imageResponses = { ...cleanedResponses };
-      let hasImageUploadErrors = false;
+      let failedUploads: { fieldId: string; error: string }[] = [];
       
       // Only attempt image uploads if there are images to upload
       if (Object.keys(imageUploads).length > 0) {
@@ -213,43 +213,54 @@ export function FormResponse() {
           // Upload all images in parallel for better performance
           const uploadPromises = Object.entries(imageUploads).map(async ([fieldId, file]) => {
             try {
-              // The uploadImage function now returns a placeholder URL if upload fails
               const imageUrl = await uploadImage(file);
-              // Check if it's a placeholder URL
-              const isPlaceholder = imageUrl.includes('placehold.co');
-              if (isPlaceholder) {
-                hasImageUploadErrors = true;
-              }
-              return { fieldId, imageUrl, success: !isPlaceholder };
+              return { fieldId, imageUrl, success: true };
             } catch (error) {
               console.error(`Error uploading image for field ${fieldId}:`, error);
-              hasImageUploadErrors = true;
-              // Return a placeholder URL
-              return { 
+              failedUploads.push({ 
                 fieldId, 
-                imageUrl: `https://placehold.co/600x400?text=${encodeURIComponent(file.name)}`,
-                success: false 
-              };
+                error: error instanceof Error ? error.message : 'Upload failed'
+              });
+              return { fieldId, success: false, error };
             }
           });
 
           const uploadResults = await Promise.all(uploadPromises);
           
-          // Update responses with image URLs for successful uploads
+          // Update responses with image URLs for successful uploads only
           uploadResults.forEach(result => {
-            imageResponses[result.fieldId] = result.imageUrl;
+            if (result.success && 'imageUrl' in result) {
+              imageResponses[result.fieldId] = result.imageUrl;
+            }
           });
           
-          // Check if any uploads failed
-          const failedUploads = uploadResults.filter(result => !result.success);
+          // If any uploads failed, show error and stop form submission
           if (failedUploads.length > 0) {
-            console.warn(`${failedUploads.length} image(s) failed to upload, but continuing with form submission`);
+            setError(
+              <div className="space-y-2">
+                <p className="font-medium">Image upload failed for the following fields:</p>
+                <ul className="list-disc list-inside space-y-1">
+                  {failedUploads.map(({ fieldId, error }) => {
+                    const field = form?.fields.find(f => f.id === fieldId);
+                    const fieldLabel = field?.label.replace(/<[^>]*>/g, '') || fieldId;
+                    return (
+                      <li key={fieldId} className="text-red-600 dark:text-red-400">
+                        {fieldLabel}: {error}
+                      </li>
+                    );
+                  })}
+                </ul>
+                <p className="mt-2 text-sm">Please try uploading the images again.</p>
+              </div>
+            );
+            setSubmitting(false);
+            return;
           }
         } catch (uploadError) {
           console.error('Error during image uploads:', uploadError);
-          hasImageUploadErrors = true;
-          // Continue with form submission even if image uploads fail
-          console.warn('Continuing with form submission without images');
+          setError('Failed to upload images. Please try again.');
+          setSubmitting(false);
+          return;
         }
       }
 
@@ -279,19 +290,16 @@ export function FormResponse() {
 
       const { error: submitError } = await supabase
         .from('form_responses')
-        .insert([{
-          form_id: id,
-          user_id: userId,
-          responses: imageResponses
-        }]);
+        .insert([
+          {
+            form_id: id,
+            user_id: userId,
+            responses: imageResponses,
+            submitted_at: new Date().toISOString(),
+          },
+        ]);
 
       if (submitError) throw submitError;
-      
-      // Show warning about image uploads if there were errors
-      if (hasImageUploadErrors) {
-        // We'll still mark as submitted but show a warning
-        console.warn('Form submitted successfully but some images failed to upload');
-      }
       
       setSubmitted(true);
       
