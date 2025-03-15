@@ -266,27 +266,19 @@ export function FormResponse() {
 
       let userId;
       
-      // Check if user is already signed in
-      const { data: { session } } = await supabase.auth.getSession();
+      // Create anonymous user for form submission
+      const anonymousEmail = `anonymous_${Date.now()}@temp.com`;
+      const anonymousPassword = `temp_${Math.random().toString(36).slice(2)}`;
       
-      if (session?.user) {
-        // Use existing user ID if signed in
-        userId = session.user.id;
-      } else {
-        // Create anonymous user if not signed in
-        const anonymousEmail = `anonymous_${Date.now()}@temp.com`;
-        const anonymousPassword = `temp_${Math.random().toString(36).slice(2)}`;
-        
-        const { data: { user }, error: signUpError } = await supabase.auth.signUp({
-          email: anonymousEmail,
-          password: anonymousPassword
-        });
+      const { data: { user }, error: signUpError } = await supabase.auth.signUp({
+        email: anonymousEmail,
+        password: anonymousPassword
+      });
 
-        if (signUpError) throw signUpError;
-        if (!user) throw new Error('Failed to create temporary user');
-        
-        userId = user.id;
-      }
+      if (signUpError) throw signUpError;
+      if (!user) throw new Error('Failed to create temporary user');
+      
+      userId = user.id;
 
       const { error: submitError } = await supabase
         .from('form_responses')
@@ -306,10 +298,8 @@ export function FormResponse() {
       // Clear saved form data after successful submission
       localStorage.removeItem(`form_${id}_responses`);
 
-      // Only sign out if we created a temporary user
-      if (!session?.user) {
-        await supabase.auth.signOut();
-      }
+      // Sign out the temporary user
+      await supabase.auth.signOut();
     } catch (error) {
       console.error('Error submitting response:', error);
       setError(error instanceof Error ? error.message : 'Failed to submit response');

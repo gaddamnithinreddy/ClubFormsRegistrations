@@ -18,22 +18,6 @@ const MAX_RETRIES = 2;
 
 export async function uploadImage(file: File, retryCount = 0): Promise<string> {
   try {
-    // Check authentication status
-    const { data: { session }, error: authError } = await supabase.auth.getSession();
-    if (authError) {
-      console.error('Auth error:', authError.message);
-      // Try to create an anonymous session if no user is logged in
-      const { data: { user }, error: signUpError } = await supabase.auth.signUp({
-        email: `${uuidv4()}@anonymous.com`,
-        password: uuidv4(),
-      });
-      
-      if (signUpError) {
-        console.error('Failed to create anonymous session:', signUpError.message);
-        throw new ImageUploadError('Authentication failed. Please try again.');
-      }
-    }
-
     // Validate file
     const validationError = validateFile(file);
     if (validationError) {
@@ -157,22 +141,14 @@ export async function uploadImage(file: File, retryCount = 0): Promise<string> {
 // Function to try direct upload to a known bucket without checking bucket list
 async function tryDirectUpload(file: File): Promise<string> {
   try {
-    // Check authentication status first
-    const { data: { session }, error: authError } = await supabase.auth.getSession();
-    if (authError || !session) {
-      console.error('Auth error in direct upload:', authError?.message || 'No session');
-      throw new ImageUploadError('Authentication required for image upload. Please try again.');
-    }
-
-    // Try with the primary bucket from config first
-    const bucketName = STORAGE_CONFIG.BUCKET_NAME;
-    
     // Create unique filename
     const timestamp = new Date().getTime();
     const fileExt = file.name.split('.').pop();
     const fileName = `${timestamp}_${uuidv4()}.${fileExt}`;
     const filePath = `${STORAGE_CONFIG.IMAGE_PATH}/${fileName}`;
     
+    // Try with the primary bucket from config first
+    const bucketName = STORAGE_CONFIG.BUCKET_NAME;
     console.log(`Attempting direct upload to ${bucketName}/${filePath}`);
     
     const { error: uploadError, data } = await supabase.storage
