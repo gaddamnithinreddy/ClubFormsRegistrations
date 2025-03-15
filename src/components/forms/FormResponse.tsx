@@ -23,6 +23,8 @@ export function FormResponse() {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUserSignedIn, setIsUserSignedIn] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState<Record<string, boolean>>({});
+  const [uploadedUrls, setUploadedUrls] = useState<Record<string, string>>({});
 
   // Check if user is already signed in
   useEffect(() => {
@@ -139,210 +141,6 @@ export function FormResponse() {
     };
   }, [id]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-    setError(null);
-
-    // Check for required fields
-    const missingRequiredFields = form?.fields
-      .filter(field => field.required)
-      .filter(field => {
-        const value = responses[field.id];
-        if (field.type === 'multiselect') {
-          return !value || (Array.isArray(value) && value.length === 0);
-        }
-        if (field.type === 'image') {
-          return !imageUploads[field.id];
-        }
-        return !value;
-      });
-
-    if (missingRequiredFields && missingRequiredFields.length > 0) {
-      setError(
-        <div className="space-y-2">
-          <p className="font-medium">Please fill in all required fields:</p>
-          <ul className="list-disc list-inside space-y-1">
-            {missingRequiredFields.map(field => {
-              // Strip HTML tags from field label
-              const plainLabel = field.label.replace(/<[^>]*>/g, '');
-              return (
-                <li key={field.id} className="text-red-600 dark:text-red-400">
-                  {plainLabel}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      );
-      setSubmitting(false);
-      return;
-    }
-
-    try {
-      const { data: formData, error: formError } = await supabase
-        .from('forms')
-        .select('accepting_responses')
-        .eq('id', id)
-        .single();
-
-      if (formError) throw formError;
-      if (!formData?.accepting_responses) {
-        throw new Error('This form is currently closed for responses');
-      }
-
-      // Clean responses by removing HTML tags from any string values
-      const cleanedResponses = { ...responses };
-      Object.keys(cleanedResponses).forEach(key => {
-        if (typeof cleanedResponses[key] === 'string') {
-          cleanedResponses[key] = cleanedResponses[key].replace(/<[^>]*>/g, '');
-        } else if (Array.isArray(cleanedResponses[key])) {
-          cleanedResponses[key] = cleanedResponses[key].map((item: any) => 
-            typeof item === 'string' ? item.replace(/<[^>]*>/g, '') : item
-          );
-        }
-      });
-
-      // Process image uploads first
-      const imageResponses = { ...cleanedResponses };
-      let failedUploads: { fieldId: string; error: string }[] = [];
-      
-      // Only attempt image uploads if there are images to upload
-      if (Object.keys(imageUploads).length > 0) {
-        try {
-          // Create anonymous user first to ensure we have proper permissions
-          const anonymousEmail = `anonymous_${Date.now()}@temp.com`;
-          const anonymousPassword = `temp_${Math.random().toString(36).slice(2)}`;
-          
-          const { data: { user }, error: signUpError } = await supabase.auth.signUp({
-            email: anonymousEmail,
-            password: anonymousPassword
-          });
-
-          if (signUpError || !user) {
-            console.error('Error creating anonymous user:', signUpError);
-            throw new Error('Failed to initialize upload process. Please try again.');
-          }
-
-          // Process uploads sequentially to prevent overload
-          for (const [fieldId, file] of Object.entries(imageUploads)) {
-            try {
-              console.log(`Processing upload for field ${fieldId}...`);
-              const imageUrl = await uploadImage(file);
-              imageResponses[fieldId] = imageUrl;
-            } catch (error) {
-              console.error(`Error uploading image for field ${fieldId}:`, error);
-              failedUploads.push({ 
-                fieldId, 
-                error: error instanceof Error ? error.message : 'Upload failed'
-              });
-            }
-          }
-          
-          // If any uploads failed, show error and stop form submission
-          if (failedUploads.length > 0) {
-            setError(
-              <div className="space-y-2">
-                <p className="font-medium">Image upload failed for the following fields:</p>
-                <ul className="list-disc list-inside space-y-1">
-                  {failedUploads.map(({ fieldId, error }) => {
-                    const field = form?.fields.find(f => f.id === fieldId);
-                    const fieldLabel = field?.label.replace(/<[^>]*>/g, '') || fieldId;
-                    return (
-                      <li key={fieldId} className="text-red-600 dark:text-red-400">
-                        {fieldLabel}: {error}
-                      </li>
-                    );
-                  })}
-                </ul>
-                <p className="mt-2 text-sm">Please try uploading the images again.</p>
-              </div>
-            );
-            setSubmitting(false);
-            await supabase.auth.signOut();
-            return;
-          }
-
-          // Submit form with uploaded images
-          const { error: submitError } = await supabase
-            .from('form_responses')
-            .insert([
-              {
-                form_id: id,
-                user_id: user.id,
-                responses: imageResponses,
-                submitted_at: new Date().toISOString(),
-              },
-            ]);
-
-          if (submitError) throw submitError;
-          
-          setSubmitted(true);
-          
-          // Clear saved form data after successful submission
-          localStorage.removeItem(`form_${id}_responses`);
-
-          // Sign out the temporary user
-          await supabase.auth.signOut();
-        } catch (uploadError) {
-          console.error('Error during image uploads:', uploadError);
-          setError('Failed to upload images. Please try again.');
-          setSubmitting(false);
-          await supabase.auth.signOut();
-          return;
-        }
-      } else {
-        // No images to upload, just submit the form with an anonymous user
-        try {
-          const anonymousEmail = `anonymous_${Date.now()}@temp.com`;
-          const anonymousPassword = `temp_${Math.random().toString(36).slice(2)}`;
-          
-          const { data: { user }, error: signUpError } = await supabase.auth.signUp({
-            email: anonymousEmail,
-            password: anonymousPassword
-          });
-
-          if (signUpError || !user) {
-            console.error('Error creating anonymous user:', signUpError);
-            throw new Error('Failed to initialize upload process. Please try again.');
-          }
-          
-          const { error: submitError } = await supabase
-            .from('form_responses')
-            .insert([
-              {
-                form_id: id,
-                user_id: user.id,
-                responses: imageResponses,
-                submitted_at: new Date().toISOString(),
-              },
-            ]);
-
-          if (submitError) throw submitError;
-          
-          setSubmitted(true);
-          
-          // Clear saved form data after successful submission
-          localStorage.removeItem(`form_${id}_responses`);
-
-          // Sign out the temporary user
-          await supabase.auth.signOut();
-        } catch (error) {
-          console.error('Error submitting form:', error);
-          setError(error instanceof Error ? error.message : 'Failed to submit form');
-          setSubmitting(false);
-          await supabase.auth.signOut();
-          return;
-        }
-      }
-    } catch (error) {
-      console.error('Error submitting response:', error);
-      setError(error instanceof Error ? error.message : 'Failed to submit response');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   const handleImageFieldUpload = async (fieldId: string, file: File) => {
     try {
       // Validate file size (5MB = 5 * 1024 * 1024 bytes)
@@ -367,18 +165,168 @@ export function FormResponse() {
         );
         return;
       }
-      
-      // Store the file in the imageUploads state
+
+      // Store the file temporarily and show loading state
       setImageUploads(prev => ({ ...prev, [fieldId]: file }));
+      setUploadingImages(prev => ({ ...prev, [fieldId]: true }));
+      setError(null);
+
+      // Create anonymous user for upload
+      const anonymousEmail = `anonymous_${Date.now()}@temp.com`;
+      const anonymousPassword = `temp_${Math.random().toString(36).slice(2)}`;
       
-      // Also set the file name in responses to show it's been selected
-      setResponses(prev => ({ ...prev, [fieldId]: file.name }));
-      
-      // Clear any previous error
-      if (error) setError(null);
+      const { data: { user }, error: signUpError } = await supabase.auth.signUp({
+        email: anonymousEmail,
+        password: anonymousPassword
+      });
+
+      if (signUpError || !user) {
+        throw new Error('Failed to initialize upload. Please try again.');
+      }
+
+      try {
+        // Upload the image
+        const imageUrl = await uploadImage(file);
+        
+        // Store the uploaded URL
+        setUploadedUrls(prev => ({ ...prev, [fieldId]: imageUrl }));
+        setResponses(prev => ({ ...prev, [fieldId]: imageUrl }));
+        
+        // Clear any previous error
+        if (error) setError(null);
+      } finally {
+        // Always sign out the temporary user
+        await supabase.auth.signOut();
+      }
     } catch (err) {
       console.error('Error handling image upload:', err);
-      setError('Failed to process image. Please try again.');
+      setError(
+        <div className="space-y-2">
+          <p className="font-medium">Upload failed:</p>
+          <p>{err instanceof Error ? err.message : 'Failed to upload image. Please try again.'}</p>
+        </div>
+      );
+      // Remove the failed upload
+      const newUploads = { ...imageUploads };
+      delete newUploads[fieldId];
+      setImageUploads(newUploads);
+    } finally {
+      setUploadingImages(prev => ({ ...prev, [fieldId]: false }));
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+
+    // Check for required fields
+    const missingRequiredFields = form?.fields
+      .filter(field => field.required)
+      .filter(field => {
+        const value = responses[field.id];
+        if (field.type === 'multiselect') {
+          return !value || (Array.isArray(value) && value.length === 0);
+        }
+        if (field.type === 'image') {
+          return !uploadedUrls[field.id]; // Check for uploaded URL instead of file
+        }
+        return !value;
+      });
+
+    if (missingRequiredFields && missingRequiredFields.length > 0) {
+      setError(
+        <div className="space-y-2">
+          <p className="font-medium">Please fill in all required fields:</p>
+          <ul className="list-disc list-inside space-y-1">
+            {missingRequiredFields.map(field => {
+              const plainLabel = field.label.replace(/<[^>]*>/g, '');
+              return (
+                <li key={field.id} className="text-red-600 dark:text-red-400">
+                  {plainLabel}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      );
+      setSubmitting(false);
+      return;
+    }
+
+    // Check if any images are still uploading
+    if (Object.values(uploadingImages).some(isUploading => isUploading)) {
+      setError(
+        <div className="space-y-2">
+          <p className="font-medium">Images still uploading:</p>
+          <p>Please wait for all images to finish uploading before submitting the form.</p>
+        </div>
+      );
+      setSubmitting(false);
+      return;
+    }
+
+    try {
+      const { data: formData, error: formError } = await supabase
+        .from('forms')
+        .select('accepting_responses')
+        .eq('id', id)
+        .single();
+
+      if (formError) throw formError;
+      if (!formData?.accepting_responses) {
+        throw new Error('This form is currently closed for responses');
+      }
+
+      // Clean responses and include uploaded image URLs
+      const cleanedResponses = { ...responses };
+      Object.keys(cleanedResponses).forEach(key => {
+        if (typeof cleanedResponses[key] === 'string') {
+          cleanedResponses[key] = cleanedResponses[key].replace(/<[^>]*>/g, '');
+        } else if (Array.isArray(cleanedResponses[key])) {
+          cleanedResponses[key] = cleanedResponses[key].map((item: any) => 
+            typeof item === 'string' ? item.replace(/<[^>]*>/g, '') : item
+          );
+        }
+      });
+
+      // Create anonymous user for form submission
+      const anonymousEmail = `anonymous_${Date.now()}@temp.com`;
+      const anonymousPassword = `temp_${Math.random().toString(36).slice(2)}`;
+      
+      const { data: { user }, error: signUpError } = await supabase.auth.signUp({
+        email: anonymousEmail,
+        password: anonymousPassword
+      });
+
+      if (signUpError || !user) {
+        throw new Error('Failed to submit form. Please try again.');
+      }
+
+      try {
+        const { error: submitError } = await supabase
+          .from('form_responses')
+          .insert([
+            {
+              form_id: id,
+              user_id: user.id,
+              responses: cleanedResponses,
+              submitted_at: new Date().toISOString(),
+            },
+          ]);
+
+        if (submitError) throw submitError;
+        
+        setSubmitted(true);
+        localStorage.removeItem(`form_${id}_responses`);
+      } finally {
+        await supabase.auth.signOut();
+      }
+    } catch (error) {
+      console.error('Error submitting form:', error);
+      setError(error instanceof Error ? error.message : 'Failed to submit form');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -598,13 +546,17 @@ export function FormResponse() {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
                         <div className="w-full px-2 text-center">
-                          <p className="text-sm overflow-hidden text-ellipsis whitespace-nowrap">
-                            {imageUploads[field.id] 
-                              ? imageUploads[field.id].name.length > 25 
-                                ? imageUploads[field.id].name.substring(0, 25) + '...' 
-                                : imageUploads[field.id].name
-                              : 'Click to upload an image (max 5MB)'}
-                          </p>
+                          {uploadingImages[field.id] ? (
+                            <p className="text-sm">Uploading image...</p>
+                          ) : (
+                            <p className="text-sm overflow-hidden text-ellipsis whitespace-nowrap">
+                              {imageUploads[field.id] 
+                                ? imageUploads[field.id].name.length > 25 
+                                  ? imageUploads[field.id].name.substring(0, 25) + '...' 
+                                  : imageUploads[field.id].name
+                                : 'Click to upload an image (max 5MB)'}
+                            </p>
+                          )}
                           {imageUploads[field.id] && imageUploads[field.id].name.length > 25 && (
                             <p className="text-xs text-gray-500 mt-1 truncate">
                               {imageUploads[field.id].name}
@@ -616,6 +568,7 @@ export function FormResponse() {
                           accept="image/*"
                           required={field.required}
                           className="hidden"
+                          disabled={uploadingImages[field.id]}
                           onChange={(e) => {
                             const file = e.target.files?.[0];
                             if (file) {
@@ -624,10 +577,15 @@ export function FormResponse() {
                           }}
                         />
                       </label>
-                      {imageUploads[field.id] && (
+                      {uploadingImages[field.id] && (
+                        <div className="flex justify-center">
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                        </div>
+                      )}
+                      {uploadedUrls[field.id] && (
                         <div className="relative inline-block mt-3">
                           <img
-                            src={URL.createObjectURL(imageUploads[field.id])}
+                            src={uploadedUrls[field.id]}
                             alt="Preview"
                             className="h-32 w-32 object-cover rounded-lg border border-gray-200 dark:border-gray-700"
                           />
@@ -637,6 +595,9 @@ export function FormResponse() {
                               const newUploads = { ...imageUploads };
                               delete newUploads[field.id];
                               setImageUploads(newUploads);
+                              const newUrls = { ...uploadedUrls };
+                              delete newUrls[field.id];
+                              setUploadedUrls(newUrls);
                               setResponses(prev => {
                                 const newResponses = { ...prev };
                                 delete newResponses[field.id];
