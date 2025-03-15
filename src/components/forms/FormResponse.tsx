@@ -210,29 +210,34 @@ export function FormResponse() {
       // Only attempt image uploads if there are images to upload
       if (Object.keys(imageUploads).length > 0) {
         try {
-          // Upload all images in parallel for better performance
-          const uploadPromises = Object.entries(imageUploads).map(async ([fieldId, file]) => {
+          // Create anonymous user first to ensure we have proper permissions
+          const anonymousEmail = `anonymous_${Date.now()}@temp.com`;
+          const anonymousPassword = `temp_${Math.random().toString(36).slice(2)}`;
+          
+          const { data: { user }, error: signUpError } = await supabase.auth.signUp({
+            email: anonymousEmail,
+            password: anonymousPassword
+          });
+
+          if (signUpError || !user) {
+            console.error('Error creating anonymous user:', signUpError);
+            throw new Error('Failed to initialize upload process. Please try again.');
+          }
+
+          // Process uploads sequentially to prevent overload
+          for (const [fieldId, file] of Object.entries(imageUploads)) {
             try {
+              console.log(`Processing upload for field ${fieldId}...`);
               const imageUrl = await uploadImage(file);
-              return { fieldId, imageUrl, success: true };
+              imageResponses[fieldId] = imageUrl;
             } catch (error) {
               console.error(`Error uploading image for field ${fieldId}:`, error);
               failedUploads.push({ 
                 fieldId, 
                 error: error instanceof Error ? error.message : 'Upload failed'
               });
-              return { fieldId, success: false, error };
             }
-          });
-
-          const uploadResults = await Promise.all(uploadPromises);
-          
-          // Update responses with image URLs for successful uploads only
-          uploadResults.forEach(result => {
-            if (result.success && 'imageUrl' in result) {
-              imageResponses[result.fieldId] = result.imageUrl;
-            }
-          });
+          }
           
           // If any uploads failed, show error and stop form submission
           if (failedUploads.length > 0) {
@@ -254,52 +259,82 @@ export function FormResponse() {
               </div>
             );
             setSubmitting(false);
+            await supabase.auth.signOut();
             return;
           }
+
+          // Submit form with uploaded images
+          const { error: submitError } = await supabase
+            .from('form_responses')
+            .insert([
+              {
+                form_id: id,
+                user_id: user.id,
+                responses: imageResponses,
+                submitted_at: new Date().toISOString(),
+              },
+            ]);
+
+          if (submitError) throw submitError;
+          
+          setSubmitted(true);
+          
+          // Clear saved form data after successful submission
+          localStorage.removeItem(`form_${id}_responses`);
+
+          // Sign out the temporary user
+          await supabase.auth.signOut();
         } catch (uploadError) {
           console.error('Error during image uploads:', uploadError);
           setError('Failed to upload images. Please try again.');
           setSubmitting(false);
+          await supabase.auth.signOut();
+          return;
+        }
+      } else {
+        // No images to upload, just submit the form with an anonymous user
+        try {
+          const anonymousEmail = `anonymous_${Date.now()}@temp.com`;
+          const anonymousPassword = `temp_${Math.random().toString(36).slice(2)}`;
+          
+          const { data: { user }, error: signUpError } = await supabase.auth.signUp({
+            email: anonymousEmail,
+            password: anonymousPassword
+          });
+
+          if (signUpError || !user) {
+            console.error('Error creating anonymous user:', signUpError);
+            throw new Error('Failed to initialize upload process. Please try again.');
+          }
+          
+          const { error: submitError } = await supabase
+            .from('form_responses')
+            .insert([
+              {
+                form_id: id,
+                user_id: user.id,
+                responses: imageResponses,
+                submitted_at: new Date().toISOString(),
+              },
+            ]);
+
+          if (submitError) throw submitError;
+          
+          setSubmitted(true);
+          
+          // Clear saved form data after successful submission
+          localStorage.removeItem(`form_${id}_responses`);
+
+          // Sign out the temporary user
+          await supabase.auth.signOut();
+        } catch (error) {
+          console.error('Error submitting form:', error);
+          setError(error instanceof Error ? error.message : 'Failed to submit form');
+          setSubmitting(false);
+          await supabase.auth.signOut();
           return;
         }
       }
-
-      let userId;
-      
-      // Create anonymous user for form submission
-      const anonymousEmail = `anonymous_${Date.now()}@temp.com`;
-      const anonymousPassword = `temp_${Math.random().toString(36).slice(2)}`;
-      
-      const { data: { user }, error: signUpError } = await supabase.auth.signUp({
-        email: anonymousEmail,
-        password: anonymousPassword
-      });
-
-      if (signUpError) throw signUpError;
-      if (!user) throw new Error('Failed to create temporary user');
-      
-      userId = user.id;
-
-      const { error: submitError } = await supabase
-        .from('form_responses')
-        .insert([
-          {
-            form_id: id,
-            user_id: userId,
-            responses: imageResponses,
-            submitted_at: new Date().toISOString(),
-          },
-        ]);
-
-      if (submitError) throw submitError;
-      
-      setSubmitted(true);
-      
-      // Clear saved form data after successful submission
-      localStorage.removeItem(`form_${id}_responses`);
-
-      // Sign out the temporary user
-      await supabase.auth.signOut();
     } catch (error) {
       console.error('Error submitting response:', error);
       setError(error instanceof Error ? error.message : 'Failed to submit response');
