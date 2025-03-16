@@ -1,3 +1,4 @@
+# Allow all web crawlers
 User-agent: *
 Allow: /
 
@@ -11,7 +12,7 @@ Disallow: /profile
 Allow: /forms/$
 
 # Sitemap location
-Sitemap: https://formflow.app/sitemap.xml
+Sitemap: https://clubformsregistrations.vercel.app/sitemap.xml
 
-# Crawl-delay
+# Optimize crawling
 Crawl-delay: 10 
