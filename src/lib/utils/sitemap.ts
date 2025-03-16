@@ -7,7 +7,8 @@ interface SitemapURL {
   priority?: number;
 }
 
-export async function generateSitemap(baseUrl: string): Promise<string> {
+export async function generateSitemap(): Promise<string> {
+  const baseUrl = 'https://clubformsregistrations.vercel.app';
   const urls: SitemapURL[] = [
     {
       loc: baseUrl,
