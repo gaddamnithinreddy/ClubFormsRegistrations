@@ -8,6 +8,7 @@ import { PasswordInput } from './PasswordInput';
 import { validateEmail, validatePassword } from '../../lib/utils/validation';
 import { useThemeStore } from '../../lib/store';
 import { Sun, Moon, Mail, HelpCircle } from 'lucide-react';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 
 export function AuthForm() {
   const [isLogin, setIsLogin] = useState(true);
@@ -96,6 +97,21 @@ export function AuthForm() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-100 to-blue-200 dark:from-gray-900 dark:to-gray-800 px-4 w-full h-full fixed inset-0 overflow-auto">
+      {/* Lottie Animation */}
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5 }}
+        className="w-72 h-72 mb-4 flex items-center justify-center"
+      >
+        <DotLottieReact
+          src="https://lottie.host/906024ab-ad58-4f1b-8d4b-0c5a588071c5/RoHAy0g9qy.lottie"
+          loop
+          autoplay
+          className="w-full h-full"
+        />
+      </motion.div>
+      
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

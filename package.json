@@ -6,6 +6,7 @@
     "preview": "vite preview --host --port 3001"
   },
   "dependencies": {
+    "@lottiefiles/dotlottie-react": "^0.13.2",
     "@supabase/supabase-js": "^2.39.7",
     "dompurify": "^3.0.9",
     "framer-motion": "^11.0.8",
