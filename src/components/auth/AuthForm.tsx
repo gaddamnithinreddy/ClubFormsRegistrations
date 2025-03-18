@@ -107,7 +107,7 @@ export function AuthForm() {
             className="w-52 h-52"
           >
             <DotLottieReact
-              src="https://lottie.host/906024ab-ad58-4f1b-8d4b-0c5a588071c5/RoHAy0g9qy.lottie"
+              src="https://lottie.host/42abc222-b99f-452c-b8f2-2cb45dc63121/dwuqKnv5Fw.lottie"
               loop
               autoplay
               className="w-full h-full"

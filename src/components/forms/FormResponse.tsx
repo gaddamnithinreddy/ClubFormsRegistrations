@@ -2,14 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Form } from '../../lib/types';
 import { supabase } from '../../lib/supabase';
-import { Loader, XCircle, X, Home, RefreshCw } from 'lucide-react';
+import { Loader, XCircle, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { SubmissionSuccess } from './SubmissionSuccess';
 import { uploadImage } from '../../lib/utils/storage';
 import { sanitizeHtml } from '../../lib/utils/sanitize';
 import { ThemeToggle } from '../ThemeToggle';
 import { ExtractedImages } from '../../lib/utils/imageExtractor';
-import { Helmet } from 'react-helmet';
 
 export function FormResponse() {
   const { id } = useParams<{ id: string }>();
@@ -26,8 +25,6 @@ export function FormResponse() {
   const [isUserSignedIn, setIsUserSignedIn] = useState(false);
   const [uploadingImages, setUploadingImages] = useState<Record<string, boolean>>({});
   const [uploadedUrls, setUploadedUrls] = useState<Record<string, string>>({});
-  const [retryCount, setRetryCount] = useState(0);
-  const [authError, setAuthError] = useState(false);
 
   // Check if user is already signed in
   useEffect(() => {
@@ -86,45 +83,6 @@ export function FormResponse() {
     }
   }, [id]);
 
-  // Add persistent auth check
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) throw error;
-        setIsUserSignedIn(!!session);
-      } catch (err) {
-        console.error('Auth check error:', err);
-        setAuthError(true);
-      }
-    };
-
-    checkAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setIsUserSignedIn(!!session);
-      if (!session && authError) {
-        // Try to create a new anonymous session
-        try {
-          const anonymousEmail = `anonymous_${Date.now()}@temp.com`;
-          const anonymousPassword = `temp_${Math.random().toString(36).slice(2)}`;
-          await supabase.auth.signUp({
-            email: anonymousEmail,
-            password: anonymousPassword
-          });
-          setAuthError(false);
-        } catch (err) {
-          console.error('Failed to create anonymous session:', err);
-        }
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [authError]);
-
-  // Add retry mechanism for failed form fetches
   useEffect(() => {
     const fetchForm = async () => {
       try {
@@ -144,26 +102,44 @@ export function FormResponse() {
         }
         
         setForm(formData);
-        setError(null);
-        setRetryCount(0);
       } catch (err) {
         console.error('Error fetching form:', err);
-        if (retryCount < 3) {
-          // Retry after 1 second
-          setTimeout(() => {
-            setRetryCount(prev => prev + 1);
-          }, 1000);
-        } else {
-          setError(err instanceof Error ? err.message : 'Form not found');
-          setForm(null);
-        }
+        setError(err instanceof Error ? err.message : 'Form not found');
+        setForm(null);
       } finally {
         setLoading(false);
       }
     };
 
     fetchForm();
-  }, [id, retryCount]);
+
+    const channel = supabase
+      .channel(`form_${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'forms',
+          filter: `id=eq.${id}`,
+        },
+        (payload) => {
+          const updatedForm = payload.new as Form;
+          if (!updatedForm.accepting_responses) {
+            setError('This form is currently closed for responses. Please contact the administrator.');
+            setForm(null);
+          } else {
+            setForm(updatedForm);
+            setError(null);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id]);
 
   const handleImageFieldUpload = async (fieldId: string, file: File) => {
     try {
@@ -173,20 +149,6 @@ export function FormResponse() {
           <div className="space-y-2">
             <p className="font-medium">File too large:</p>
             <p>The image "{file.name}" exceeds the maximum size of 5MB. Please select a smaller image.</p>
-            <div className="mt-4 flex gap-4 justify-center">
-              <button
-                onClick={() => setError(null)}
-                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-              >
-                Try Again
-              </button>
-              <button
-                onClick={() => navigate('/')}
-                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-              >
-                Go Home
-              </button>
-            </div>
           </div>
         );
         return;
@@ -242,20 +204,6 @@ export function FormResponse() {
         <div className="space-y-2">
           <p className="font-medium">Upload failed:</p>
           <p>{err instanceof Error ? err.message : 'Failed to upload image. Please try again.'}</p>
-          <div className="mt-4 flex gap-4 justify-center">
-            <button
-              onClick={() => setError(null)}
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-            >
-              Try Again
-            </button>
-            <button
-              onClick={() => navigate('/')}
-              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-            >
-              Go Home
-            </button>
-          </div>
         </div>
       );
       // Remove the failed upload
@@ -382,73 +330,25 @@ export function FormResponse() {
     }
   };
 
-  // Add SEO metadata
-  const pageTitle = form ? `${form.title} - Response Form` : 'Form Response';
-  const pageDescription = form ? `Submit your response to ${form.title}${form.description ? `: ${form.description}` : ''}` : 'Form response page';
-
   if (loading) {
     return (
-      <>
-        <Helmet>
-          <title>{pageTitle}</title>
-          <meta name="description" content={pageDescription} />
-          <meta property="og:title" content={pageTitle} />
-          <meta property="og:description" content={pageDescription} />
-          <meta name="twitter:title" content={pageTitle} />
-          <meta name="twitter:description" content={pageDescription} />
-          {form?.banner_image && (
-            <>
-              <meta property="og:image" content={form.banner_image} />
-              <meta name="twitter:image" content={form.banner_image} />
-            </>
-          )}
-          <link rel="canonical" href={window.location.href} />
-        </Helmet>
-        <div className="flex flex-col justify-center items-center min-h-screen p-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-4" />
-          <p className="text-gray-600 dark:text-gray-400">Loading form...</p>
-        </div>
-      </>
+      <div className="flex justify-center items-center min-h-screen p-4">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+      </div>
     );
   }
 
   if (error || !form) {
     return (
-      <>
-        <Helmet>
-          <title>Form Not Available</title>
-          <meta name="description" content="This form is currently not available." />
-        </Helmet>
-        <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
-          <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 text-center">
-            <XCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-            <h2 className="text-xl font-bold mb-2 dark:text-white">Form Not Available</h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              {error || 'This form is not accepting responses at the moment. Please contact the administrator.'}
-            </p>
-            <div className="flex gap-4 justify-center mt-6">
-              <button
-                onClick={() => {
-                  setRetryCount(0);
-                  setError(null);
-                  setLoading(true);
-                }}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-              >
-                <RefreshCw size={16} />
-                Try Again
-              </button>
-              <button
-                onClick={() => navigate('/')}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-              >
-                <Home size={16} />
-                Go Home
-              </button>
-            </div>
-          </div>
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
+        <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 text-center">
+          <XCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold mb-2 dark:text-white">Form Not Available</h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            {error || 'This form is not accepting responses at the moment. Please contact the administrator.'}
+          </p>
         </div>
-      </>
+      </div>
     );
   }
 
@@ -465,306 +365,289 @@ export function FormResponse() {
   }
 
   return (
-    <>
-      <Helmet>
-        <title>{pageTitle}</title>
-        <meta name="description" content={pageDescription} />
-        <meta property="og:title" content={pageTitle} />
-        <meta property="og:description" content={pageDescription} />
-        <meta name="twitter:title" content={pageTitle} />
-        <meta name="twitter:description" content={pageDescription} />
-        {form.banner_image && (
-          <>
-            <meta property="og:image" content={form.banner_image} />
-            <meta name="twitter:image" content={form.banner_image} />
-          </>
-        )}
-        <link rel="canonical" href={window.location.href} />
-      </Helmet>
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8 px-4 sm:px-6">
-        {/* Only show theme toggle if user is not already signed in (to avoid duplicates) */}
-        {!isUserSignedIn && (
-          <div className="fixed top-4 right-4 z-50">
-            <ThemeToggle />
-          </div>
-        )}
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8 px-4 sm:px-6">
+      {/* Only show theme toggle if user is not already signed in (to avoid duplicates) */}
+      {!isUserSignedIn && (
+        <div className="fixed top-4 right-4 z-50">
+          <ThemeToggle />
+        </div>
+      )}
 
-        <div className="max-w-2xl mx-auto">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden"
-          >
-            {form.banner_image && (
-              <div className="w-full h-48">
-                <img
-                  src={form.banner_image}
-                  alt={form.title}
-                  className="w-full h-full object-cover"
-                />
-              </div>
+      <div className="max-w-2xl mx-auto">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden"
+        >
+          {form.banner_image && (
+            <div className="w-full h-48">
+              <img
+                src={form.banner_image}
+                alt={form.title}
+                className="w-full h-full object-cover"
+              />
+            </div>
+          )}
+          
+          <div className="p-6">
+            <h1 className="text-2xl font-bold mb-2 dark:text-white" 
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(form.title) }} />
+            
+            <ExtractedImages 
+              html={form.title} 
+              maxHeight={48}
+              containerClassName="mb-4"
+            />
+            
+            {form.description && (
+              <div 
+                className="text-gray-600 dark:text-gray-400 mb-6"
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(form.description) }}
+              />
             )}
             
-            <div className="p-6">
-              <h1 className="text-2xl font-bold mb-2 dark:text-white" 
-                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(form.title) }} />
-              
-              <ExtractedImages 
-                html={form.title} 
-                maxHeight={48}
-                containerClassName="mb-4"
-              />
-              
-              {form.description && (
-                <div 
-                  className="text-gray-600 dark:text-gray-400 mb-6"
-                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(form.description) }}
-                />
-              )}
-              
-              <ExtractedImages 
-                html={form.description} 
-                maxHeight={48}
-                containerClassName="mb-6"
-              />
-              
-              {form.event_date && (
-                <div className="mb-6">
-                  <p className="text-blue-600 dark:text-blue-400">
-                    Event Date: {new Date(form.event_date).toLocaleString()}
+            <ExtractedImages 
+              html={form.description} 
+              maxHeight={48}
+              containerClassName="mb-6"
+            />
+            
+            {form.event_date && (
+              <div className="mb-6">
+                <p className="text-blue-600 dark:text-blue-400">
+                  Event Date: {new Date(form.event_date).toLocaleString()}
+                </p>
+                {form.event_location && (
+                  <p className="text-blue-600 dark:text-blue-400 mt-1">
+                    Venue: {form.event_location}
                   </p>
-                  {form.event_location && (
-                    <p className="text-blue-600 dark:text-blue-400 mt-1">
-                      Venue: {form.event_location}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              <div className="flex justify-between items-center mb-6">
-                <div className="text-sm text-gray-500 dark:text-gray-400">
-                  {isSaving ? (
-                    <span className="flex items-center gap-2">
-                      <Loader className="animate-spin" size={16} />
-                      Saving...
-                    </span>
-                  ) : lastSaved ? (
-                    <span>Last saved: {lastSaved.toLocaleTimeString()}</span>
-                  ) : null}
-                </div>
+                )}
               </div>
+            )}
 
-              {error && (
-                <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/50 text-red-600 dark:text-red-400 rounded-md">
-                  {error}
-                </div>
-              )}
+            <div className="flex justify-between items-center mb-6">
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                {isSaving ? (
+                  <span className="flex items-center gap-2">
+                    <Loader className="animate-spin" size={16} />
+                    Saving...
+                  </span>
+                ) : lastSaved ? (
+                  <span>Last saved: {lastSaved.toLocaleTimeString()}</span>
+                ) : null}
+              </div>
+            </div>
 
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {form.fields.map((field) => (
-                  <motion.div
-                    key={field.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="animate-fade-in"
-                  >
-                    <div className="space-y-2 mb-2">
-                      <div className="flex items-center gap-2">
-                        <div 
-                          className="text-base font-semibold text-gray-900 dark:text-white"
-                          dangerouslySetInnerHTML={{ __html: sanitizeHtml(field.label) }}
-                        />
-                        {field.required && (
-                          <span className="text-red-500 text-sm">*</span>
-                        )}
-                      </div>
-                      
-                      <ExtractedImages 
-                        html={field.label} 
-                        maxHeight={48}
-                        containerClassName="mt-2"
+            {error && (
+              <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/50 text-red-600 dark:text-red-400 rounded-md">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {form.fields.map((field) => (
+                <motion.div
+                  key={field.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="animate-fade-in"
+                >
+                  <div className="space-y-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <div 
+                        className="text-base font-semibold text-gray-900 dark:text-white"
+                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(field.label) }}
                       />
-                      
-                      {field.image && (
-                        <div className="mt-2">
-                          <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-1 bg-white dark:bg-gray-800 inline-block">
-                            <img 
-                              src={field.image} 
-                              alt="Field image" 
-                              className="max-h-48 max-w-full rounded-lg object-contain" 
-                              onError={(e) => {
-                                console.error('Image failed to load:', field.image);
-                                e.currentTarget.style.display = 'none';
+                      {field.required && (
+                        <span className="text-red-500 text-sm">*</span>
+                      )}
+                    </div>
+                    
+                    <ExtractedImages 
+                      html={field.label} 
+                      maxHeight={48}
+                      containerClassName="mt-2"
+                    />
+                    
+                    {field.image && (
+                      <div className="mt-2">
+                        <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-1 bg-white dark:bg-gray-800 inline-block">
+                          <img 
+                            src={field.image} 
+                            alt="Field image" 
+                            className="max-h-48 max-w-full rounded-lg object-contain" 
+                            onError={(e) => {
+                              console.error('Image failed to load:', field.image);
+                              e.currentTarget.style.display = 'none';
+                            }}
+                            loading="lazy"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {field.type === 'multiselect' ? (
+                    <div className="space-y-2">
+                      <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                        (You can select multiple options)
+                      </div>
+                      <div className="space-y-2 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
+                        {field.options?.map((option) => (
+                          <label key={option} className="flex items-center space-x-3 p-2 rounded-lg hover:bg-white dark:hover:bg-gray-700 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={(responses[field.id] || []).includes(option)}
+                              onChange={(e) => {
+                                const currentValues = responses[field.id] || [];
+                                const newValues = e.target.checked
+                                  ? [...currentValues, option]
+                                  : currentValues.filter((value: string) => value !== option);
+                                setResponses({ ...responses, [field.id]: newValues });
                               }}
-                              loading="lazy"
+                              className="h-4 w-4 text-blue-500 border-gray-300 rounded focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600"
                             />
-                          </div>
+                            <span className="text-gray-700 dark:text-gray-300">{option}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ) : field.type === 'select' ? (
+                    <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
+                      <select
+                        required={field.required}
+                        value={responses[field.id] || ''}
+                        onChange={(e) => setResponses({ ...responses, [field.id]: e.target.value })}
+                        className="w-full rounded-lg border-gray-300 dark:border-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white p-2"
+                      >
+                        <option value="">Select an option</option>
+                        {field.options?.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : field.type === 'textarea' ? (
+                    <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
+                      <textarea
+                        required={field.required}
+                        value={responses[field.id] || ''}
+                        onChange={(e) => setResponses({ ...responses, [field.id]: e.target.value })}
+                        className="w-full rounded-lg border-gray-300 dark:border-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white p-3"
+                        rows={4}
+                        placeholder="Enter your response here..."
+                      />
+                    </div>
+                  ) : field.type === 'image' ? (
+                    <div className="space-y-2 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
+                      <label className="flex flex-col items-center px-2 sm:px-4 py-6 bg-white dark:bg-gray-700 text-blue-500 dark:text-blue-400 rounded-lg border-2 border-dashed border-blue-300 dark:border-blue-600 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mb-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <div className="w-full px-2 text-center">
+                          {uploadingImages[field.id] ? (
+                            <p className="text-sm">Uploading image...</p>
+                          ) : (
+                            <p className="text-sm overflow-hidden text-ellipsis whitespace-nowrap">
+                              {imageUploads[field.id] 
+                                ? imageUploads[field.id].name.length > 25 
+                                  ? imageUploads[field.id].name.substring(0, 25) + '...' 
+                                  : imageUploads[field.id].name
+                                : 'Click to upload an image (max 5MB)'}
+                            </p>
+                          )}
+                          {imageUploads[field.id] && imageUploads[field.id].name.length > 25 && (
+                            <p className="text-xs text-gray-500 mt-1 truncate">
+                              {imageUploads[field.id].name}
+                            </p>
+                          )}
+                        </div>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          required={field.required}
+                          className="hidden"
+                          disabled={uploadingImages[field.id]}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              handleImageFieldUpload(field.id, file);
+                            }
+                          }}
+                        />
+                      </label>
+                      {uploadingImages[field.id] && (
+                        <div className="flex justify-center">
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                        </div>
+                      )}
+                      {uploadedUrls[field.id] && (
+                        <div className="relative inline-block mt-3">
+                          <img
+                            src={uploadedUrls[field.id]}
+                            alt="Preview"
+                            className="h-32 w-32 object-cover rounded-lg border border-gray-200 dark:border-gray-700"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newUploads = { ...imageUploads };
+                              delete newUploads[field.id];
+                              setImageUploads(newUploads);
+                              const newUrls = { ...uploadedUrls };
+                              delete newUrls[field.id];
+                              setUploadedUrls(newUrls);
+                              setResponses(prev => {
+                                const newResponses = { ...prev };
+                                delete newResponses[field.id];
+                                return newResponses;
+                              });
+                            }}
+                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                          >
+                            <X size={16} />
+                          </button>
                         </div>
                       )}
                     </div>
+                  ) : (
+                    <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
+                      <input
+                        type={field.type}
+                        required={field.required}
+                        value={responses[field.id] || ''}
+                        onChange={(e) => setResponses({ ...responses, [field.id]: e.target.value })}
+                        className="w-full rounded-lg border-gray-300 dark:border-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white p-3"
+                        placeholder={`Enter ${field.type === 'email' ? 'your email' : field.type === 'number' ? 'a number' : 'your response'}`}
+                      />
+                    </div>
+                  )}
+                </motion.div>
+              ))}
 
-                    {field.type === 'multiselect' ? (
-                      <div className="space-y-2">
-                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-                          (You can select multiple options)
-                        </div>
-                        <div className="space-y-2 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
-                          {field.options?.map((option) => (
-                            <label key={option} className="flex items-center space-x-3 p-2 rounded-lg hover:bg-white dark:hover:bg-gray-700 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={(responses[field.id] || []).includes(option)}
-                                onChange={(e) => {
-                                  const currentValues = responses[field.id] || [];
-                                  const newValues = e.target.checked
-                                    ? [...currentValues, option]
-                                    : currentValues.filter((value: string) => value !== option);
-                                  setResponses({ ...responses, [field.id]: newValues });
-                                }}
-                                className="h-4 w-4 text-blue-500 border-gray-300 rounded focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600"
-                              />
-                              <span className="text-gray-700 dark:text-gray-300">{option}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    ) : field.type === 'select' ? (
-                      <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
-                        <select
-                          required={field.required}
-                          value={responses[field.id] || ''}
-                          onChange={(e) => setResponses({ ...responses, [field.id]: e.target.value })}
-                          className="w-full rounded-lg border-gray-300 dark:border-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white p-2"
-                        >
-                          <option value="">Select an option</option>
-                          {field.options?.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    ) : field.type === 'textarea' ? (
-                      <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
-                        <textarea
-                          required={field.required}
-                          value={responses[field.id] || ''}
-                          onChange={(e) => setResponses({ ...responses, [field.id]: e.target.value })}
-                          className="w-full rounded-lg border-gray-300 dark:border-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white p-3"
-                          rows={4}
-                          placeholder="Enter your response here..."
-                        />
-                      </div>
-                    ) : field.type === 'image' ? (
-                      <div className="space-y-2 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
-                        <label className="flex flex-col items-center px-2 sm:px-4 py-6 bg-white dark:bg-gray-700 text-blue-500 dark:text-blue-400 rounded-lg border-2 border-dashed border-blue-300 dark:border-blue-600 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mb-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                          <div className="w-full px-2 text-center">
-                            {uploadingImages[field.id] ? (
-                              <p className="text-sm">Uploading image...</p>
-                            ) : (
-                              <p className="text-sm overflow-hidden text-ellipsis whitespace-nowrap">
-                                {imageUploads[field.id] 
-                                  ? imageUploads[field.id].name.length > 25 
-                                    ? imageUploads[field.id].name.substring(0, 25) + '...' 
-                                    : imageUploads[field.id].name
-                                  : 'Click to upload an image (max 5MB)'}
-                              </p>
-                            )}
-                            {imageUploads[field.id] && imageUploads[field.id].name.length > 25 && (
-                              <p className="text-xs text-gray-500 mt-1 truncate">
-                                {imageUploads[field.id].name}
-                              </p>
-                            )}
-                          </div>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            required={field.required}
-                            className="hidden"
-                            disabled={uploadingImages[field.id]}
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) {
-                                handleImageFieldUpload(field.id, file);
-                              }
-                            }}
-                          />
-                        </label>
-                        {uploadingImages[field.id] && (
-                          <div className="flex justify-center">
-                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
-                          </div>
-                        )}
-                        {uploadedUrls[field.id] && (
-                          <div className="relative inline-block mt-3">
-                            <img
-                              src={uploadedUrls[field.id]}
-                              alt="Preview"
-                              className="h-32 w-32 object-cover rounded-lg border border-gray-200 dark:border-gray-700"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const newUploads = { ...imageUploads };
-                                delete newUploads[field.id];
-                                setImageUploads(newUploads);
-                                const newUrls = { ...uploadedUrls };
-                                delete newUrls[field.id];
-                                setUploadedUrls(newUrls);
-                                setResponses(prev => {
-                                  const newResponses = { ...prev };
-                                  delete newResponses[field.id];
-                                  return newResponses;
-                                });
-                              }}
-                              className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                            >
-                              <X size={16} />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
-                        <input
-                          type={field.type}
-                          required={field.required}
-                          value={responses[field.id] || ''}
-                          onChange={(e) => setResponses({ ...responses, [field.id]: e.target.value })}
-                          className="w-full rounded-lg border-gray-300 dark:border-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white p-3"
-                          placeholder={`Enter ${field.type === 'email' ? 'your email' : field.type === 'number' ? 'a number' : 'your response'}`}
-                        />
-                      </div>
-                    )}
-                  </motion.div>
-                ))}
-
-                <div className="flex justify-end">
-                  <motion.button
-                    type="submit"
-                    disabled={submitting}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="w-full sm:w-auto px-6 py-3 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                  >
-                    {submitting ? (
-                      <>
-                        <Loader className="animate-spin" size={20} />
-                        Submitting...
-                      </>
-                    ) : (
-                      'Submit'
-                    )}
-                  </motion.button>
-                </div>
-              </form>
-            </div>
-          </motion.div>
-        </div>
+              <div className="flex justify-end">
+                <motion.button
+                  type="submit"
+                  disabled={submitting}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="w-full sm:w-auto px-6 py-3 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
+                  {submitting ? (
+                    <>
+                      <Loader className="animate-spin" size={20} />
+                      Submitting...
+                    </>
+                  ) : (
+                    'Submit'
+                  )}
+                </motion.button>
+              </div>
+            </form>
+          </div>
+        </motion.div>
       </div>
-    </>
+    </div>
   );
 }

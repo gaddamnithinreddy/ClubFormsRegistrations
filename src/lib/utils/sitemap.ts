@@ -1,55 +1,58 @@
 import { supabase } from '../supabase';
 
-interface SitemapURL {
-  loc: string;
-  lastmod?: string;
-  changefreq?: 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never';
-  priority?: number;
-}
-
 export async function generateSitemap(): Promise<string> {
-  const baseUrl = 'https://clubformsregistrations.vercel.app';
-  const urls: SitemapURL[] = [
-    {
-      loc: baseUrl,
-      changefreq: 'daily',
-      priority: 1.0
-    }
-  ];
+  const baseUrl = 'https://formflow.app';
+  const now = new Date().toISOString();
 
+  // Static routes
+  const staticRoutes = [
+    '',
+    '/login',
+    '/register',
+    '/dashboard',
+    '/forms/new',
+  ].map(route => ({
+    url: `${baseUrl}${route}`,
+    lastmod: now,
+    changefreq: route === '' ? 'daily' : 'weekly',
+    priority: route === '' ? '1.0' : '0.8'
+  }));
+
+  // Dynamic form routes
+  let formRoutes: any[] = [];
   try {
-    // Get all public forms
-    const { data: forms, error } = await supabase
+    const { data: forms } = await supabase
       .from('forms')
       .select('id, updated_at')
-      .eq('accepting_responses', true);
+      .eq('is_public', true);
 
-    if (error) throw error;
-
-    // Add form URLs to sitemap
-    forms?.forEach(form => {
-      urls.push({
-        loc: `${baseUrl}/form/${form.id}`,
+    if (forms) {
+      formRoutes = forms.map(form => ({
+        url: `${baseUrl}/forms/${form.id}`,
         lastmod: form.updated_at,
-        changefreq: 'daily',
-        priority: 0.8
-      });
-    });
+        changefreq: 'weekly',
+        priority: '0.6'
+      }));
+    }
+  } catch (error) {
+    console.error('Error fetching forms for sitemap:', error);
+  }
 
-    // Generate XML
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+  // Combine all routes
+  const allRoutes = [...staticRoutes, ...formRoutes];
+
+  // Generate XML
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls.map(url => `  <url>
-    <loc>${url.loc}</loc>
-    ${url.lastmod ? `<lastmod>${url.lastmod}</lastmod>` : ''}
-    ${url.changefreq ? `<changefreq>${url.changefreq}</changefreq>` : ''}
-    ${url.priority ? `<priority>${url.priority}</priority>` : ''}
-  </url>`).join('\n')}
+  ${allRoutes.map(route => `
+  <url>
+    <loc>${route.url}</loc>
+    <lastmod>${route.lastmod}</lastmod>
+    <changefreq>${route.changefreq}</changefreq>
+    <priority>${route.priority}</priority>
+  </url>
+  `).join('')}
 </urlset>`;
 
-    return xml;
-  } catch (error) {
-    console.error('Error generating sitemap:', error);
-    throw error;
-  }
+  return xml;
 } 
