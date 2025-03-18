@@ -3,10 +3,20 @@ import { supabase } from '../supabase';
 
 export async function signIn(email: string, password: string): Promise<AuthResponse> {
   try {
-    return await supabase.auth.signInWithPassword({
+    const response = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     });
+    
+    if (response.data?.user) {
+      console.log('User signed in successfully:', {
+        id: response.data.user.id,
+        email: response.data.user.email,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    return response;
   } catch (error) {
     console.error('Sign in error:', error);
     throw error;

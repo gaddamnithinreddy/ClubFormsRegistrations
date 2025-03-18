@@ -23,6 +23,7 @@ export default function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
+        console.log('Active session detected for user:', session.user.email);
         // Fetch and set user role
         supabase
           .from('user_roles')
@@ -31,6 +32,7 @@ export default function App() {
           .single()
           .then(({ data }) => {
             if (data?.role) {
+              console.log('User role set to:', data.role);
               setRole(data.role);
             }
           });
@@ -38,8 +40,27 @@ export default function App() {
     });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth state changed:', event);
+      
+      if (event === 'SIGNED_IN') {
+        console.log('User signed in:', session?.user?.email);
+        if (session?.user) {
+          // Fetch and set user role on sign in
+          supabase
+            .from('user_roles')
+            .select('role')
+            .eq('user_id', session.user.id)
+            .single()
+            .then(({ data }) => {
+              if (data?.role) {
+                console.log('User role updated to:', data.role);
+                setRole(data.role);
+              }
+            });
+        }
+      } else if (!session) {
+        console.log('No active session, user signed out');
         setRole(null);
       }
     });

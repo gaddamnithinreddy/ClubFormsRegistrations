@@ -67,13 +67,19 @@ export function AuthForm() {
 
     setLoading(true);
     setError(null);
+    console.log('Attempting login for:', email);
 
     try {
       if (isLogin) {
-        const { error } = await signIn(email, password);
+        console.log('Starting sign-in process...');
+        const { data, error } = await signIn(email, password);
         if (error) throw error;
+        
+        console.log('Sign-in successful, user authenticated:', data.user?.email);
+        console.log('Redirecting to role selection page');
         navigate('/role');
       } else {
+        console.log('Starting sign-up process...');
         const { error } = await signUp(email, password);
         if (error) {
           if (error.message === 'User already registered') {
@@ -81,11 +87,13 @@ export function AuthForm() {
           }
           throw error;
         }
+        console.log('Account created successfully');
         setIsLogin(true);
         setError('Account created successfully! Please sign in.');
       }
     } catch (err) {
       const authError = err as AuthError;
+      console.error('Authentication error:', authError.message);
       setError(getAuthErrorMessage(authError));
       if (authError.message.includes('token')) {
         localStorage.removeItem('supabase.auth.token');

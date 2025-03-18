@@ -38,13 +38,32 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 })();
 
-// Add error handling for refresh token failures
+// Add detailed auth state tracking
 supabase.auth.onAuthStateChange((event, session) => {
-  if (event === 'TOKEN_REFRESHED') {
-    console.log('Token has been refreshed');
-  }
-  if (event === 'SIGNED_OUT') {
-    // Clear any application state if needed
-    console.log('User signed out');
+  const timestamp = new Date().toISOString();
+  
+  switch (event) {
+    case 'SIGNED_IN':
+      console.log(`[${timestamp}] User signed in:`, {
+        id: session?.user?.id,
+        email: session?.user?.email,
+        event: event
+      });
+      break;
+    case 'SIGNED_OUT':
+      console.log(`[${timestamp}] User signed out`);
+      // Clear any application state if needed
+      break;
+    case 'TOKEN_REFRESHED':
+      console.log(`[${timestamp}] Auth token refreshed`);
+      break;
+    case 'USER_UPDATED':
+      console.log(`[${timestamp}] User profile updated:`, {
+        id: session?.user?.id,
+        email: session?.user?.email
+      });
+      break;
+    default:
+      console.log(`[${timestamp}] Auth event:`, event, session?.user?.email);
   }
 });
