@@ -59,10 +59,18 @@ export default function App() {
     <ErrorBoundary>
       <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 ${isDarkMode ? 'dark' : ''}`}>
         <Helmet>
-          <title>Form Builder</title>
-          <meta name="description" content="Create and manage forms with our easy-to-use form builder" />
+          <title>Club Forms Registration System</title>
+          <meta name="description" content="Create, manage, and submit club registration forms easily. A streamlined platform for college club registrations and event management." />
           <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
           <meta name="theme-color" content={isDarkMode ? '#111827' : '#f9fafb'} />
+          <meta name="keywords" content="club forms, registration, college events, club registration, form builder" />
+          <meta name="author" content="ClubFormsRegistrations" />
+          <meta property="og:title" content="Club Forms Registration System" />
+          <meta property="og:description" content="Create, manage, and submit club registration forms easily. A streamlined platform for college club registrations." />
+          <meta property="og:type" content="website" />
+          <meta property="og:url" content="https://clubformsregistrations.vercel.app/" />
+          <meta property="og:image" content="https://clubformsregistrations.vercel.app/icons/og-image.png" />
+          <link rel="canonical" href="https://clubformsregistrations.vercel.app/" />
         </Helmet>
         
         <NetworkStatus />

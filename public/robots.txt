@@ -11,7 +11,7 @@ Disallow: /profile
 Allow: /forms/$
 
 # Sitemap location
-Sitemap: https://formflow.app/sitemap.xml
+Sitemap: https://clubformsregistrations.vercel.app/sitemap.xml
 
 # Crawl-delay
 Crawl-delay: 10 
