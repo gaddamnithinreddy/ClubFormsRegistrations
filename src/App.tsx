@@ -1,5 +1,5 @@
 import React, { useEffect, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LoadingFallback } from './components/LoadingFallback';
 import { AuthForm } from './components/auth/AuthForm';
@@ -96,7 +96,7 @@ export default function App() {
         
         <NetworkStatus />
         <Suspense fallback={<LoadingFallback />}>
-          <BrowserRouter>
+          <HashRouter>
             {role && <Header />}
             <main className="pt-4">
               <Routes>
@@ -113,7 +113,7 @@ export default function App() {
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </main>
-          </BrowserRouter>
+          </HashRouter>
         </Suspense>
       </div>
     </ErrorBoundary>
